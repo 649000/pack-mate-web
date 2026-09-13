@@ -28,9 +28,23 @@ yarn-error.log*
 .env*.local
 .env
 
+# firebase
+.firebase/
+firebase-debug.log*
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
+.runtimeconfig.json
+
+# supabase
+.supabase/
+supabase/.branches
+supabase/.temp
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/reference
