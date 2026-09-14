@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+reference
+functions/node_modules
+package-lock.json
+.opencode
+.agents
+openspec
+supabase
+*.md
