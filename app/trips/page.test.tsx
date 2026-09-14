@@ -69,4 +69,18 @@ describe("TripsView", () => {
       }),
     );
   });
+
+  it("deletes a trip after confirmation", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    vi.mocked(data.deleteTrip).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+    const confirm = await screen.findAllByRole("button", { name: /^delete$/i });
+    await user.click(confirm[confirm.length - 1]);
+
+    await waitFor(() => expect(data.deleteTrip).toHaveBeenCalledWith("t1"));
+  });
 });

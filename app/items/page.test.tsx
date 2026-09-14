@@ -70,4 +70,36 @@ describe("ItemsView", () => {
 
     await waitFor(() => expect(data.createItem).not.toHaveBeenCalled());
   });
+
+  it("edits an item", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([item]);
+    vi.mocked(data.updateItem).mockResolvedValue({ ...item, name: "Tee" });
+    const user = userEvent.setup();
+    render(<ItemsView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+    const name = await screen.findByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Tee");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(data.updateItem).toHaveBeenCalledWith("i1", { name: "Tee", defaultQty: 2 }),
+    );
+  });
+
+  it("deletes an item after confirmation", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([item]);
+    vi.mocked(data.deleteItem).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<ItemsView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+    const confirm = await screen.findAllByRole("button", { name: /^delete$/i });
+    await user.click(confirm[confirm.length - 1]);
+
+    await waitFor(() => expect(data.deleteItem).toHaveBeenCalledWith("i1"));
+  });
 });

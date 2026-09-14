@@ -71,4 +71,34 @@ describe("BagsView", () => {
     expect(await screen.findByText(/no default contents yet/i)).toBeInTheDocument();
     expect(data.listBagContents).toHaveBeenCalledWith("b1");
   });
+
+  it("edits a bag", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    vi.mocked(data.updateBag).mockResolvedValue({ ...bag, name: "Gear" });
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText("Electronics");
+
+    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+    const name = await screen.findByLabelText("Name");
+    await user.clear(name);
+    await user.type(name, "Gear");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(data.updateBag).toHaveBeenCalledWith("b1", { name: "Gear" }));
+  });
+
+  it("deletes a bag after confirmation", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    vi.mocked(data.deleteBag).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText("Electronics");
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+    const confirm = await screen.findAllByRole("button", { name: /^delete$/i });
+    await user.click(confirm[confirm.length - 1]);
+
+    await waitFor(() => expect(data.deleteBag).toHaveBeenCalledWith("b1"));
+  });
 });

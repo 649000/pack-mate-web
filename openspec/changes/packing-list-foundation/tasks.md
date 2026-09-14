@@ -24,12 +24,12 @@
 
 ## 5. Item library UI
 
-- [ ] 5.1 Implement list, create, edit, and delete for reusable items with default quantity; verify each operation against the `items` spec, including the empty state
+- [x] 5.1 Implement list, create, edit, and delete for reusable items with default quantity; verify each operation against the `items` spec, including the empty state
 - [ ] 5.2 Verify editing or deleting a library item leaves existing packing lists unchanged
 
 ## 6. Bag library UI
 
-- [ ] 6.1 Implement list, create, edit, and delete for reusable bags; verify the empty state
+- [x] 6.1 Implement list, create, edit, and delete for reusable bags; verify the empty state
 - [ ] 6.2 Implement managing a bag's default contents (add/remove items with quantity); verify contents persist and are copied on add to a trip
 
 ## 7. Trip management UI

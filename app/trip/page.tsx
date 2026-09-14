@@ -27,7 +27,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   addAdHocEntry,
@@ -59,12 +58,14 @@ function SortableEntry({
   bags,
   onTogglePacked,
   onMove,
+  onChangeQty,
   onDelete,
 }: {
   entry: TripEntry;
   bags: TripBag[];
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
+  onChangeQty: (entry: TripEntry, qty: number) => void;
   onDelete: (entry: TripEntry) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -103,7 +104,15 @@ function SortableEntry({
       >
         {entry.name}
       </span>
-      {entry.qty > 1 ? <Badge variant="secondary">x{entry.qty}</Badge> : null}
+      <Input
+        type="number"
+        min={1}
+        step={1}
+        defaultValue={entry.qty}
+        className="h-7 w-14 px-2 text-xs"
+        aria-label={`Quantity for ${entry.name}`}
+        onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
+      />
       <select
         className="h-7 rounded-md border border-input bg-background px-2 text-xs"
         value={locationValue(entry)}
@@ -131,6 +140,7 @@ function EntryGroup({
   bags,
   onTogglePacked,
   onMove,
+  onChangeQty,
   onDelete,
   onReorder,
 }: {
@@ -139,6 +149,7 @@ function EntryGroup({
   bags: TripBag[];
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
+  onChangeQty: (entry: TripEntry, qty: number) => void;
   onDelete: (entry: TripEntry) => void;
   onReorder: (ordered: TripEntry[]) => void;
 }) {
@@ -184,6 +195,7 @@ function EntryGroup({
                     bags={bags}
                     onTogglePacked={onTogglePacked}
                     onMove={onMove}
+                    onChangeQty={onChangeQty}
                     onDelete={onDelete}
                   />
                 ))}
@@ -196,7 +208,7 @@ function EntryGroup({
   );
 }
 
-function TripView() {
+export function TripView() {
   const searchParams = useSearchParams();
   const tripId = searchParams.get("id") ?? "";
 
@@ -307,6 +319,11 @@ function TripView() {
 
   function handleMove(entry: TripEntry, destination: Destination) {
     void run(() => setEntryLocation(entry, destinationToLocation(destination)), "Moved");
+  }
+
+  function handleChangeQty(entry: TripEntry, qty: number) {
+    if (!Number.isInteger(qty) || qty < 1 || qty === entry.qty) return;
+    void run(() => updateEntry(entry.id, { qty }), "Quantity updated");
   }
 
   function handleDelete(entry: TripEntry) {
@@ -480,6 +497,7 @@ function TripView() {
               bags={bags}
               onTogglePacked={handleTogglePacked}
               onMove={handleMove}
+              onChangeQty={handleChangeQty}
               onDelete={handleDelete}
               onReorder={handleReorder}
             />
@@ -490,6 +508,7 @@ function TripView() {
             bags={bags}
             onTogglePacked={handleTogglePacked}
             onMove={handleMove}
+            onChangeQty={handleChangeQty}
             onDelete={handleDelete}
             onReorder={handleReorder}
           />
@@ -499,6 +518,7 @@ function TripView() {
             bags={bags}
             onTogglePacked={handleTogglePacked}
             onMove={handleMove}
+            onChangeQty={handleChangeQty}
             onDelete={handleDelete}
             onReorder={handleReorder}
           />
