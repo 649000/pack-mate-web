@@ -34,7 +34,7 @@ test.describe("authenticated critical path", () => {
 
     // Pack it.
     await page.getByRole("checkbox", { name: /mark packed/i }).click();
-    await expect(page.getByText(/1\/1 packed/i)).toBeVisible();
+    await expect(page.getByText(/1\/1 packed/i).first()).toBeVisible();
 
     // Delete the trip.
     await page.getByRole("link", { name: /back to trips/i }).click();
