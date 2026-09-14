@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReusableItem } from "@/lib/types";
 
@@ -34,6 +35,12 @@ describe("ItemsView", () => {
     vi.mocked(data.listItems).mockResolvedValue([]);
     render(<ItemsView />);
     expect(await screen.findByText(/no items yet/i)).toBeInTheDocument();
+  });
+
+  it("surfaces a load failure", async () => {
+    vi.mocked(data.listItems).mockRejectedValue(new Error("boom"));
+    render(<ItemsView />);
+    await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
   });
 
   it("lists existing items with their default quantity", async () => {

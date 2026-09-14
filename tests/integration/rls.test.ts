@@ -156,4 +156,76 @@ describe.skipIf(!hasConfig)("RLS and copy-on-add (integration)", () => {
     const after = await rest(`trip_entries?trip_id=eq.${tripId}&select=*`, a.idToken);
     expect((after.body as { name: string }[])[0].name).toBe("Charger");
   }, 30_000);
+
+  it("enforces location exclusivity, persists quantity and order, and cascades on trip delete", async () => {
+    const item = await rest("reusable_items", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ name: "Socks", default_qty: 1 }),
+    });
+    const itemId = (item.body as { id: string }[])[0].id;
+
+    const trip = await rest("trips", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ name: "Cascade" }),
+    });
+    const tripId = (trip.body as { id: string }[])[0].id;
+
+    const bag = await rest("reusable_bags", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ name: "Daypack" }),
+    });
+    const bagId = (bag.body as { id: string }[])[0].id;
+
+    await rest("reusable_bag_items", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ bag_id: bagId, item_id: itemId, qty: 1, position: 0 }),
+    });
+    await rest("rpc/add_library_bag_to_trip", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ p_trip_id: tripId, p_bag_id: bagId }),
+    });
+
+    const entries = await rest(`trip_entries?trip_id=eq.${tripId}&select=*`, a.idToken);
+    const entryId = (entries.body as { id: string }[])[0].id;
+
+    // Quantity persists.
+    await rest(`trip_entries?id=eq.${entryId}`, a.idToken, {
+      method: "PATCH",
+      body: JSON.stringify({ qty: 3 }),
+    });
+    const qty = await rest(`trip_entries?id=eq.${entryId}&select=qty`, a.idToken);
+    expect((qty.body as { qty: number }[])[0].qty).toBe(3);
+
+    // Bag membership and With Me are mutually exclusive.
+    const conflict = await rest(`trip_entries?id=eq.${entryId}`, a.idToken, {
+      method: "PATCH",
+      body: JSON.stringify({ is_with_me: true }),
+    });
+    expect(conflict.status).toBeGreaterThanOrEqual(400);
+
+    // Order persists.
+    const loose = await rest("trip_entries", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Adapter", qty: 1, position: 1 }),
+    });
+    const looseId = (loose.body as { id: string }[])[0].id;
+    await rest(`trip_entries?id=eq.${entryId}`, a.idToken, {
+      method: "PATCH",
+      body: JSON.stringify({ position: 1 }),
+    });
+    await rest(`trip_entries?id=eq.${looseId}`, a.idToken, {
+      method: "PATCH",
+      body: JSON.stringify({ position: 0 }),
+    });
+    const ordered = await rest(
+      `trip_entries?trip_id=eq.${tripId}&select=id&order=position.asc`,
+      a.idToken,
+    );
+    expect((ordered.body as { id: string }[])[0].id).toBe(looseId);
+
+    // Deleting the trip removes its packing list.
+    await rest(`trips?id=eq.${tripId}`, a.idToken, { method: "DELETE" });
+    const remaining = await rest(`trip_entries?trip_id=eq.${tripId}&select=id`, a.idToken);
+    expect(remaining.body).toEqual([]);
+  }, 30_000);
 });
