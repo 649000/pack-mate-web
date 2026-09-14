@@ -31,17 +31,17 @@
 ## 7. Continuous integration
 
 - [x] 7.1 Add a pipeline running as separate jobs (typecheck, lint+format, unit+component, build+bundle, e2e) on push to main; verify the workflow file is valid
-- [ ] 7.2 Verify the pipeline passes on GitHub (requires pushing to the repository)
+- [x] 7.2 Verify the pipeline passes on GitHub (requires pushing to the repository)
 
 ## 8. Continuous deployment
 
 - [x] 8.1 Gate deployment on all checks and deploy Hosting + Functions, then run the integration tests; verify the workflow file is valid
-- [ ] 8.2 Configure the `FIREBASE_SERVICE_ACCOUNT` CI secret; verify a main deploy succeeds and the integration tests pass
+- [x] 8.2 Configure the `FIREBASE_SERVICE_ACCOUNT` CI secret; verify a main deploy succeeds and the integration tests pass
 
 ## 9. Authenticated end-to-end
 
 - [x] 9.1 Add a gated authenticated Playwright flow (sign up, create a trip, pack an item, delete the trip); verify it is skipped unless `E2E_AUTH=1`
-- [ ] 9.2 Verify the authenticated flow passes against the deployed backend
+- [x] 9.2 Verify the authenticated flow passes against the deployed backend
 
 ## 10. Configuration hygiene
 
