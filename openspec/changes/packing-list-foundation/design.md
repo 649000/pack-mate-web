@@ -50,6 +50,8 @@ Firebase uids are strings, not UUIDs, so `auth.uid()` (which casts the subject c
 
 Firebase ID tokens carry no `role` claim, so Supabase would evaluate them as `anon`. A Firebase Auth blocking function (`beforeUserCreated` / `beforeUserSignedIn`) stamps `role: "authenticated"` on every sign-up and sign-in. This is the one Firebase Function the project needs.
 
+Blocking functions are a Google Cloud Identity Platform (GCIP) feature, so the Firebase project must be upgraded to Firebase Auth with Identity Platform. That upgrade requires no migration and is free up to 50,000 monthly active users.
+
 - **Why:** keeps identity on Firebase (already chosen for hosting and future AI) while letting PostgREST/RLS enforce ownership without custom token verification.
 - **Risk:** Supabase trusts an external issuer, so `project_id` scoping and strict RLS are required to prevent tokens from unrelated Firebase projects being accepted.
 

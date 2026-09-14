@@ -96,7 +96,7 @@ jobs:
       - name: Deploy functions
         uses: w9jds/firebase-action@master
         with:
-          args: deploy --only functions
+          args: deploy --only functions --force
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - name: Verify live backend (RLS integration)
