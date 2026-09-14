@@ -1,10 +1,17 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import security from "eslint-plugin-security";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    plugins: { security },
+    rules: {
+      ...security.configs.recommended.rules,
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -12,6 +19,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Reference templates are read-only inspiration, not part of the app.
+    "reference/**",
+    // Firebase Functions have their own runtime/deps.
+    "functions/**",
   ]),
 ]);
 

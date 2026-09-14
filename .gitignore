@@ -1,8 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
-/.pnp
+node_modules/
+.pnp
 .pnp.js
 
 # testing
@@ -24,9 +24,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# local env files
-.env*.local
+# env files
+# Public client config is committed in lib/public-config.ts, not in env files.
+# Local env files may hold secrets and must never be committed.
 .env
+.env*.local
 
 # firebase
 .firebase/
@@ -46,5 +48,11 @@ supabase/.temp
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
 
 /reference

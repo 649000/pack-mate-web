@@ -69,9 +69,28 @@ Expected architecture:
 * Supabase Postgres (with PostgREST + RLS) as the data backend
 * Firebase Hosting for static hosting
 * Firebase AI Logic for future AI features
-* Firebase Functions only when a server is genuinely required (e.g. payments)
+* Firebase Functions only when a server is genuinely required (currently: a Firebase Auth blocking function that stamps the `authenticated` role claim for Supabase)
 
 Keep the frontend independent of backend implementation details.
+
+### Cost
+
+Keep Firebase and Supabase usage as cheap as possible. Avoid code or configuration that could produce a large bill.
+
+* Prefer serverless, scale-to-zero defaults; do not enable always-on resources without a clear requirement.
+* Do not set Cloud Functions min instances, provisioned throughput, or paid add-ons without a clear requirement.
+* Avoid cost traps: long-lived listeners, polling, scheduled jobs, storage egress, and egress-heavy AI calls.
+* Use the smallest plan or instance that satisfies the requirement.
+* If a change could increase cost, call it out explicitly before implementing.
+
+### Deployment and CI/CD
+
+Deployment runs through GitHub Actions, not from a developer machine.
+
+* CI runs lint, type-check, tests and the build.
+* Deployment to Firebase Hosting and Functions is performed by GitHub Actions.
+* Do not run `firebase deploy` manually.
+* Keep credentials and secrets in GitHub Actions secrets, never in the repository.
 
 ### Authentication
 
@@ -282,6 +301,17 @@ rather than:
 
 > "I need to create an item entity and assign it to a container."
 
+## Specification Workflow
+
+All non-trivial work goes through OpenSpec. The specification is the source of truth.
+
+* Create or update an OpenSpec change before implementing a feature or behaviour change.
+* Use the CLI (`openspec new change "<name>"`); never create change directories by hand.
+* Keep the change's proposal, specs, design and tasks coherent with the implementation.
+* Do not implement functionality that has not been specified.
+* When implementation reveals a design issue, update the artifacts rather than diverging silently.
+* Archive a change once its work is complete and verified.
+
 ## Implementation Rules for Agents
 
 Before making changes:
@@ -306,20 +336,13 @@ Do not consider a feature complete merely because the happy path works.
 
 ## Testing
 
-Tests should cover:
+Automate testing as much as possible. Every meaningful behaviour change should come with tests.
 
-* Normal behaviour
-* Validation failures
-* Authentication failures
-* Authorisation failures
-* Empty states
-* Important edge cases
-
-For domain logic, prefer unit tests.
-
-For API behaviour, test the complete request/response behaviour where practical.
-
-Do not write tests that merely reproduce implementation details.
+* Unit-test domain logic and validation (Vitest).
+* Integration-test data access against a Supabase project, including RLS: a second user must never read or write another user's rows.
+* Cover normal behaviour, validation failures, authentication failures, authorisation failures, empty states and important edge cases.
+* Do not write tests that merely reproduce implementation details.
+* Tests run in CI on every pull request and must pass before deployment.
 
 ## Git
 
@@ -372,3 +395,13 @@ A change is complete when:
 * Tests have been added or updated where appropriate.
 * The UI works on mobile and desktop.
 * No unnecessary dependencies or architectural complexity have been introduced.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
