@@ -1,6 +1,22 @@
 import { supabase } from "./supabase";
-import type { ReusableBag, ReusableBagItem, ReusableItem, Trip, TripBag, TripEntry } from "./types";
-import { validateDateRange, validateName, validateQty } from "./validation";
+import { getFirebaseAuth } from "./firebase";
+import type {
+  ReusableBag,
+  ReusableBagItem,
+  ReusableItem,
+  Trip,
+  TripBag,
+  TripEntry,
+  UserProfile,
+} from "./types";
+import {
+  validateBirthday,
+  validateDateRange,
+  validateGender,
+  validateName,
+  validateOptionalName,
+  validateQty,
+} from "./validation";
 
 function unwrap<T>(data: T | null, error: { message: string } | null): T {
   if (error) throw new Error(error.message);
@@ -295,4 +311,108 @@ export async function reorderTripBags(ordered: TripBag[]): Promise<void> {
       supabase.from("trip_bags").update({ position: index }).eq("id", bag.id),
     ),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Profile
+// ---------------------------------------------------------------------------
+
+export async function getProfile(): Promise<UserProfile | null> {
+  const { data, error } = await supabase.from("profiles").select("*").maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as UserProfile | null) ?? null;
+}
+
+export async function upsertProfile(input: {
+  displayName: string | null;
+  birthday: string | null;
+  gender: string | null;
+}): Promise<UserProfile> {
+  const displayName = validateOptionalName(input.displayName);
+  const birthday = validateBirthday(input.birthday);
+  const gender = validateGender(input.gender);
+  const uid = getFirebaseAuth().currentUser?.uid;
+  if (!uid) throw new Error("You must be signed in to update your profile");
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        user_id: uid,
+        display_name: displayName,
+        birthday,
+        gender,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    )
+    .select()
+    .single();
+  return unwrap(data as UserProfile | null, error);
+}
+
+// ---------------------------------------------------------------------------
+// Account data: export and deletion
+// ---------------------------------------------------------------------------
+
+export type ExportedData = {
+  profile: UserProfile | null;
+  reusable_items: ReusableItem[];
+  reusable_bags: ReusableBag[];
+  reusable_bag_items: ReusableBagItem[];
+  trips: Trip[];
+  trip_bags: TripBag[];
+  trip_entries: TripEntry[];
+};
+
+export async function listAllBagItems(): Promise<ReusableBagItem[]> {
+  const { data, error } = await supabase.from("reusable_bag_items").select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ReusableBagItem[];
+}
+
+export async function listAllTripBags(): Promise<TripBag[]> {
+  const { data, error } = await supabase.from("trip_bags").select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TripBag[];
+}
+
+export async function listAllTripEntries(): Promise<TripEntry[]> {
+  const { data, error } = await supabase.from("trip_entries").select("*");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TripEntry[];
+}
+
+export async function collectUserData(): Promise<ExportedData> {
+  const [profile, items, bags, bagItems, trips, tripBags, tripEntries] = await Promise.all([
+    getProfile(),
+    listItems(),
+    listBags(),
+    listAllBagItems(),
+    listTrips(),
+    listAllTripBags(),
+    listAllTripEntries(),
+  ]);
+
+  return {
+    profile,
+    reusable_items: items,
+    reusable_bags: bags,
+    reusable_bag_items: bagItems,
+    trips,
+    trip_bags: tripBags,
+    trip_entries: tripEntries,
+  };
+}
+
+export async function deleteAllUserData(): Promise<void> {
+  // Deleting trips cascades to trip_bags and trip_entries; deleting reusable
+  // bags and items cascades to reusable_bag_items.
+  const { error: tripsError } = await supabase.from("trips").delete().neq("id", "");
+  if (tripsError) throw new Error(tripsError.message);
+  const { error: bagsError } = await supabase.from("reusable_bags").delete().neq("id", "");
+  if (bagsError) throw new Error(bagsError.message);
+  const { error: itemsError } = await supabase.from("reusable_items").delete().neq("id", "");
+  if (itemsError) throw new Error(itemsError.message);
+  const { error: profileError } = await supabase.from("profiles").delete().neq("user_id", "");
+  if (profileError) throw new Error(profileError.message);
 }

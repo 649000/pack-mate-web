@@ -284,7 +284,6 @@ The interface should feel:
 
 Avoid:
 
-* Enterprise dashboards
 * Excessive tables
 * Dense configuration screens
 * Unnecessary modals

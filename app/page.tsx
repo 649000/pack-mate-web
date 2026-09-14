@@ -1,30 +1,31 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+"use client";
 
-export default function Home() {
+import Header from "@/components/landing/header";
+import Hero from "@/components/landing/hero";
+import TrustedBrands from "@/components/landing/trusted-brands";
+import HowItWorks from "@/components/landing/how-it-works";
+import Features from "@/components/landing/features";
+import Testimonials from "@/components/landing/testimonails";
+import Pricing from "@/components/landing/pricing";
+import FAQ from "@/components/landing/faq";
+import CallToAction from "@/components/landing/call-to-action";
+import Contact from "@/components/landing/contact";
+import Footer from "@/components/landing/footer";
+
+export default function Page() {
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="mx-auto flex w-full max-w-3xl items-center px-4 py-4">
-        <span className="font-semibold tracking-tight">Pack Mate</span>
-        <Button asChild variant="ghost" size="sm" className="ms-auto">
-          <Link href="/sign-in">Sign in</Link>
-        </Button>
-      </header>
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-4 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-balance">
-          Know what you are bringing, and where it is.
-        </h1>
-        <p className="max-w-md text-muted-foreground">
-          Build reusable bags and items once, then pack them into a list for any trip. Mark what is
-          in a bag, what is With Me, and what is already packed.
-        </p>
-        <Button asChild size="lg">
-          <Link href="/sign-in">Get started</Link>
-        </Button>
-      </main>
-      <footer className="mx-auto w-full max-w-3xl px-4 py-6 text-center text-xs text-muted-foreground">
-        Pack Mate
-      </footer>
+    <div className="min-h-screen">
+      <Header />
+      <Hero />
+      <TrustedBrands />
+      <HowItWorks />
+      <Features />
+      <Testimonials />
+      <Pricing />
+      <FAQ />
+      <CallToAction />
+      <Contact />
+      <Footer />
     </div>
   );
 }

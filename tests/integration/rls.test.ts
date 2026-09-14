@@ -228,4 +228,34 @@ describe.skipIf(!hasConfig)("RLS and copy-on-add (integration)", () => {
     const remaining = await rest(`trip_entries?trip_id=eq.${tripId}&select=id`, a.idToken);
     expect(remaining.body).toEqual([]);
   }, 30_000);
+
+  it("scopes profiles to the owner", async () => {
+    const created = await rest("profiles", a.idToken, {
+      method: "POST",
+      body: JSON.stringify({ display_name: "Ada", gender: "female" }),
+    });
+    expect(created.status).toBe(201);
+    expect((created.body as { user_id: string }[])[0].user_id).toBe(a.localId);
+
+    const own = await rest("profiles?select=*", a.idToken);
+    expect(own.status).toBe(200);
+    expect((own.body as unknown[]).length).toBe(1);
+
+    const bList = await rest("profiles?select=*", b.idToken);
+    expect(bList.body).toEqual([]);
+
+    const bUpdate = await rest(`profiles?user_id=eq.${a.localId}`, b.idToken, {
+      method: "PATCH",
+      body: JSON.stringify({ display_name: "Hacked" }),
+    });
+    expect(Array.isArray(bUpdate.body) ? bUpdate.body.length : 0).toBe(0);
+
+    const forge = await rest("profiles", b.idToken, {
+      method: "POST",
+      body: JSON.stringify({ user_id: a.localId, display_name: "Forged" }),
+    });
+    expect(forge.status).toBe(403);
+
+    await rest(`profiles?user_id=eq.${a.localId}`, a.idToken, { method: "DELETE" });
+  }, 30_000);
 });

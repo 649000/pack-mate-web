@@ -52,3 +52,14 @@ export type TripEntry = {
 
 export type TripEntryLocation =
   { kind: "bag"; bagId: string } | { kind: "with_me" } | { kind: "loose" };
+
+export type Gender = "female" | "male" | "other" | "prefer_not_to_say";
+
+export type UserProfile = {
+  user_id: string;
+  display_name: string | null;
+  birthday: string | null;
+  gender: Gender | null;
+  created_at: string;
+  updated_at: string;
+};

@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   ValidationError,
   parseQty,
+  validateBirthday,
   validateDateRange,
+  validateEmail,
+  validateGender,
   validateName,
+  validateOptionalName,
+  validatePassword,
   validateQty,
 } from "./validation";
 
@@ -65,5 +70,82 @@ describe("validateDateRange", () => {
 
   it("rejects an end before the start", () => {
     expect(() => validateDateRange("2026-01-05", "2026-01-01")).toThrow(ValidationError);
+  });
+});
+
+describe("validateOptionalName", () => {
+  it("trims and returns a name", () => {
+    expect(validateOptionalName("  Ada  ")).toBe("Ada");
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateOptionalName("")).toBeNull();
+    expect(validateOptionalName("   ")).toBeNull();
+    expect(validateOptionalName(null)).toBeNull();
+    expect(validateOptionalName(undefined)).toBeNull();
+  });
+
+  it("rejects names that are too long", () => {
+    expect(() => validateOptionalName("a".repeat(81))).toThrow(ValidationError);
+  });
+});
+
+describe("validateBirthday", () => {
+  it("accepts an ISO date in the past", () => {
+    expect(validateBirthday("1990-05-28")).toBe("1990-05-28");
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateBirthday("")).toBeNull();
+    expect(validateBirthday(null)).toBeNull();
+  });
+
+  it("rejects malformed and impossible dates", () => {
+    expect(() => validateBirthday("28-05-1990")).toThrow(ValidationError);
+    expect(() => validateBirthday("2026-02-31")).toThrow(ValidationError);
+  });
+
+  it("rejects a future date", () => {
+    const future = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString().slice(0, 10);
+    expect(() => validateBirthday(future)).toThrow(ValidationError);
+  });
+});
+
+describe("validateGender", () => {
+  it("accepts an allowed value", () => {
+    expect(validateGender("female")).toBe("female");
+    expect(validateGender("prefer_not_to_say")).toBe("prefer_not_to_say");
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateGender("")).toBeNull();
+    expect(validateGender(null)).toBeNull();
+  });
+
+  it("rejects a value outside the allowed set", () => {
+    expect(() => validateGender("unknown")).toThrow(ValidationError);
+  });
+});
+
+describe("validateEmail", () => {
+  it("trims and returns a valid address", () => {
+    expect(validateEmail("  ada@example.com  ")).toBe("ada@example.com");
+  });
+
+  it("rejects invalid addresses", () => {
+    expect(() => validateEmail("ada")).toThrow(ValidationError);
+    expect(() => validateEmail("ada@example")).toThrow(ValidationError);
+    expect(() => validateEmail("@example.com")).toThrow(ValidationError);
+  });
+});
+
+describe("validatePassword", () => {
+  it("accepts a password at the minimum length", () => {
+    expect(validatePassword("12345678")).toBe("12345678");
+  });
+
+  it("rejects a password below the minimum length", () => {
+    expect(() => validatePassword("1234567")).toThrow(ValidationError);
+    expect(() => validatePassword("1234567")).toThrow(/at least 8/i);
   });
 });

@@ -39,7 +39,7 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText(/1\/1 packed/i).first()).toBeVisible();
 
     // Delete the trip.
-    await page.getByRole("link", { name: /back to trips/i }).click();
+    await page.goto("/trips");
     await expect(page).toHaveURL(/\/trips$/);
     await page.getByRole("button", { name: /^delete$/i }).click();
     await page
@@ -47,6 +47,19 @@ test.describe("authenticated critical path", () => {
       .last()
       .click();
     await expect(page.getByText("Japan")).toHaveCount(0);
+  });
+
+  test("app shell provides navigation on mobile and desktop", async ({ page }) => {
+    await signUp(page);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/trips");
+    await expect(page.getByRole("button", { name: /^bags$/i }).first()).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/trips");
+    await page.getByRole("button", { name: /open navigation/i }).click();
+    await expect(page.getByRole("button", { name: /^items$/i }).last()).toBeVisible();
   });
 
   test("empty states and responsive layout across app screens", async ({ page }) => {
@@ -60,7 +73,7 @@ test.describe("authenticated critical path", () => {
 
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 800 });
-      for (const path of ["/trips", "/bags", "/items"]) {
+      for (const path of ["/trips", "/bags", "/items", "/account"]) {
         await page.goto(path);
         const overflow = await page.evaluate(
           () => document.documentElement.scrollWidth - window.innerWidth,
@@ -68,5 +81,29 @@ test.describe("authenticated critical path", () => {
         expect(overflow, `${path} at ${width}px`).toBeLessThanOrEqual(1);
       }
     }
+  });
+
+  test("saves profile details and exports data", async ({ page }) => {
+    await signUp(page);
+
+    await page.goto("/account");
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.getByText(/personal info/i)).toBeVisible();
+
+    await page.getByLabel("Name").fill("Ada Lovelace");
+    await page.getByRole("button", { name: /save changes/i }).click();
+    await expect(page.getByText(/profile saved/i)).toBeVisible();
+
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: /export data/i }).click();
+    expect((await download).suggestedFilename()).toMatch(/pack-mate-export/);
+  });
+
+  test("shows the account entry point in the user menu", async ({ page }) => {
+    await signUp(page);
+
+    await page.getByRole("button", { name: /user menu/i }).click();
+    await page.getByRole("menuitem", { name: /account/i }).click();
+    await expect(page).toHaveURL(/\/account$/);
   });
 });
