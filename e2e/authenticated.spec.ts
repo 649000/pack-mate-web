@@ -24,6 +24,7 @@ test.describe("authenticated critical path", () => {
     await page.getByRole("button", { name: /new trip/i }).click();
     await page.getByLabel("Name").fill("Japan");
     await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("Japan")).toBeVisible();
 
     // Open the trip and add a one-off item.
