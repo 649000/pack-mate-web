@@ -24,7 +24,7 @@ import {
 import { upsertProfile } from "@/lib/data";
 import { initials } from "@/lib/utils";
 import { GENDERS } from "@/lib/validation";
-import type { UserProfile } from "@/lib/types";
+import type { DisplayWeightUnit, UserProfile } from "@/lib/types";
 
 const GENDER_LABELS = new Map<string, string>([
   ["female", "Female"],
@@ -46,6 +46,7 @@ function ProfileForm({
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [birthday, setBirthday] = useState(profile?.birthday ?? "");
   const [gender, setGender] = useState(profile?.gender ?? "");
+  const [weightUnit, setWeightUnit] = useState<DisplayWeightUnit>(profile?.weight_unit ?? "kg");
   const [saving, setSaving] = useState(false);
 
   const email = user?.email ?? "";
@@ -58,6 +59,7 @@ function ProfileForm({
         displayName: displayName || null,
         birthday: birthday || null,
         gender: gender || null,
+        weightUnit,
       });
       toast.success("Profile saved");
       await onSaved();
@@ -129,6 +131,26 @@ function ProfileForm({
                     {GENDER_LABELS.get(option)}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 lg:flex-nowrap">
+          <Label htmlFor="profile-weight-unit" className="flex w-full max-w-56">
+            Weight unit
+          </Label>
+          <div className="grow">
+            <Select
+              value={weightUnit}
+              onValueChange={(value) => setWeightUnit(value as DisplayWeightUnit)}
+            >
+              <SelectTrigger id="profile-weight-unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="kg">Kilograms (kg)</SelectItem>
+                <SelectItem value="lb">Pounds (lb)</SelectItem>
               </SelectContent>
             </Select>
           </div>

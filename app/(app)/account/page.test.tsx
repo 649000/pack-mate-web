@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/data", () => ({
   getProfile: vi.fn(),
+  upsertProfile: vi.fn(),
 }));
 
 const authState = vi.hoisted(() => ({
@@ -77,5 +78,27 @@ describe("AccountView", () => {
     expect(await screen.findByText("ada@example.com")).toBeInTheDocument();
     expect(screen.getByText(/sign-in with google/i)).toBeInTheDocument();
     expect(screen.getByText(/two-factor authentication/i)).toBeInTheDocument();
+  });
+
+  it("shows the weight unit preference defaulting to kilograms", async () => {
+    vi.mocked(data.getProfile).mockResolvedValue(null);
+    render(<AccountView />);
+
+    expect(await screen.findByLabelText("Weight unit")).toHaveTextContent(/kilogram/i);
+  });
+
+  it("reflects a saved pounds preference", async () => {
+    vi.mocked(data.getProfile).mockResolvedValue({
+      user_id: "u1",
+      display_name: null,
+      birthday: null,
+      gender: null,
+      weight_unit: "lb",
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+    render(<AccountView />);
+
+    await waitFor(() => expect(screen.getByLabelText("Weight unit")).toHaveTextContent(/pound/i));
   });
 });

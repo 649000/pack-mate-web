@@ -45,14 +45,16 @@ import {
   addBagItem,
   createBag,
   deleteBag,
+  getProfile,
   listBagContents,
   listBags,
   listItems,
   removeBagItem,
   updateBag,
 } from "@/lib/data";
-import type { ReusableBag, ReusableBagItem, ReusableItem } from "@/lib/types";
+import type { DisplayWeightUnit, ReusableBag, ReusableBagItem, ReusableItem } from "@/lib/types";
 import { parseQty, validateName } from "@/lib/validation";
+import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
 
 export function BagsView() {
   const [bags, setBags] = useState<ReusableBag[]>([]);
@@ -62,6 +64,8 @@ export function BagsView() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ReusableBag | null>(null);
   const [name, setName] = useState("");
+  const [limit, setLimit] = useState("");
+  const [weightUnit, setWeightUnit] = useState<DisplayWeightUnit>("kg");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ReusableBag | null>(null);
 
@@ -71,10 +75,11 @@ export function BagsView() {
   const [addQty, setAddQty] = useState("1");
 
   function refresh() {
-    return Promise.all([listBags(), listItems()])
-      .then(([nextBags, nextItems]) => {
+    return Promise.all([listBags(), listItems(), getProfile()])
+      .then(([nextBags, nextItems, profile]) => {
         setBags(nextBags);
         setItems(nextItems);
+        setWeightUnit(profile?.weight_unit ?? "kg");
       })
       .catch((error: unknown) => {
         toast.error(error instanceof Error ? error.message : "Failed to load bags");
@@ -95,12 +100,18 @@ export function BagsView() {
   function openCreate() {
     setEditing(null);
     setName("");
+    setLimit("");
     setEditorOpen(true);
   }
 
   function openEdit(bag: ReusableBag) {
     setEditing(bag);
     setName(bag.name);
+    setLimit(
+      bag.weight_limit_grams === null
+        ? ""
+        : String(Number(fromGrams(bag.weight_limit_grams, weightUnit).toFixed(2))),
+    );
     setEditorOpen(true);
   }
 
@@ -108,12 +119,16 @@ export function BagsView() {
     event.preventDefault();
     setSaving(true);
     try {
-      const bagName = validateName(name, "Bag name");
+      const payload = {
+        name: validateName(name, "Bag name"),
+        weightLimitGrams:
+          limit.trim() === "" ? null : Math.round(toGrams(Number(limit), weightUnit)),
+      };
       if (editing) {
-        await updateBag(editing.id, { name: bagName });
+        await updateBag(editing.id, payload);
         toast.success("Bag updated");
       } else {
-        await createBag({ name: bagName });
+        await createBag(payload);
         toast.success("Bag created");
       }
       setEditorOpen(false);
@@ -207,7 +222,14 @@ export function BagsView() {
               <TableBody>
                 {bags.map((bag) => (
                   <TableRow key={bag.id}>
-                    <TableCell className="font-medium">{bag.name}</TableCell>
+                    <TableCell>
+                      <span className="font-medium">{bag.name}</span>
+                      {bag.weight_limit_grams !== null ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Limit {formatWeight(bag.weight_limit_grams, weightUnit)}
+                        </span>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <Button variant="outline" size="sm" onClick={() => void openContents(bag)}>
@@ -236,7 +258,7 @@ export function BagsView() {
               <DialogTitle>{editing ? "Edit bag" : "New bag"}</DialogTitle>
               <DialogDescription>A bag is a container you reuse across trips.</DialogDescription>
             </DialogHeader>
-            <div className="py-4">
+            <div className="flex flex-col gap-4 py-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="bag-name">Name</Label>
                 <Input
@@ -244,6 +266,18 @@ export function BagsView() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="bag-limit">Weight limit ({weightUnit})</Label>
+                <Input
+                  id="bag-limit"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={limit}
+                  onChange={(event) => setLimit(event.target.value)}
+                  placeholder={weightUnit === "kg" ? "e.g. 23" : "e.g. 50"}
                 />
               </div>
             </div>

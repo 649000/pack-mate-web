@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Backpack, ListChecks, Luggage, type LucideIcon } from "lucide-react";
+import { Backpack, ListChecks, Luggage, Share2, type LucideIcon } from "lucide-react";
 import {
   AccordionMenu,
   AccordionMenuClassNames,
@@ -18,10 +18,13 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const navGroups: { label: string; items: NavItem[] }[] = [
+export const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Packing",
-    items: [{ title: "Trips", path: "/trips", icon: ListChecks }],
+    items: [
+      { title: "Trips", path: "/trips", icon: ListChecks },
+      { title: "Shared links", path: "/shares", icon: Share2 },
+    ],
   },
   {
     label: "Library",

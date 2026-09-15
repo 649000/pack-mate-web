@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -31,34 +31,85 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
   addAdHocEntry,
   addLibraryBagToTrip,
   addLibraryItemToTrip,
+  createShareLink,
   deleteEntry,
+  getActiveShareLink,
+  getProfile,
   getTrip,
   listBags,
   listItems,
   listTripBags,
   listTripEntries,
+  regenerateShareLink,
   reorderEntries,
+  setBagParent,
   setEntryLocation,
   updateEntry,
 } from "@/lib/data";
 import {
+  bagDescendantIds,
+  buildBagTree,
   destinationBagId,
   destinationToLocation,
+  entryLocationPath,
+  filterEntriesByCategory,
   groupEntries,
   locationValue,
   packingProgress,
+  searchEntries,
+  type BagNode,
+  type CategoryFilter,
   type Destination,
 } from "@/lib/packing";
-import type { ReusableBag, ReusableItem, Trip, TripBag, TripEntry } from "@/lib/types";
-import { parseQty, validateName } from "@/lib/validation";
+import type {
+  DisplayWeightUnit,
+  ItemCategory,
+  ReusableBag,
+  ReusableItem,
+  ShareLink,
+  Trip,
+  TripBag,
+  TripEntry,
+} from "@/lib/types";
+import {
+  ITEM_CATEGORY_GROUPS,
+  ITEM_CATEGORY_LABELS,
+  parseQty,
+  validateName,
+} from "@/lib/validation";
+import {
+  formatWeight,
+  sumBagWeight,
+  tripBaggageTotal,
+  weightByCategory,
+  type WeightTotal,
+} from "@/lib/weight";
+import { WeightSummary } from "@/components/packing/weight-summary";
+import { CategoryBadge } from "@/components/packing/category-badge";
+import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
+import {
+  buildShareUrl,
+  SHARE_EXPIRY_OPTIONS,
+  shareExpiryToDate,
+  type ShareExpiry,
+} from "@/lib/share";
 
 function SortableEntry({
   entry,
@@ -67,6 +118,7 @@ function SortableEntry({
   onMove,
   onChangeQty,
   onDelete,
+  onEditDetails,
 }: {
   entry: TripEntry;
   bags: TripBag[];
@@ -74,10 +126,15 @@ function SortableEntry({
   onMove: (entry: TripEntry, destination: Destination) => void;
   onChangeQty: (entry: TripEntry, qty: number) => void;
   onDelete: (entry: TripEntry) => void;
+  onEditDetails: (entry: TripEntry) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
   });
+  const [expanded, setExpanded] = useState(false);
+  const hasDetails = Boolean(entry.description || entry.link || entry.image_url);
+  const locationPath = entryLocationPath(entry, bags);
+  const nestedPath = locationPath.includes(" > ") ? locationPath : null;
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -85,58 +142,100 @@ function SortableEntry({
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center gap-2 rounded-md border bg-card px-2 py-2"
-    >
-      <button
-        type="button"
-        className="cursor-grab touch-none px-1 text-muted-foreground"
-        aria-label="Reorder"
-        {...attributes}
-        {...listeners}
-      >
-        ::
-      </button>
-      <Checkbox
-        checked={entry.is_packed}
-        onCheckedChange={() => onTogglePacked(entry)}
-        aria-label={entry.is_packed ? "Mark unpacked" : "Mark packed"}
-      />
-      <span
-        className={
-          entry.is_packed ? "flex-1 text-sm line-through text-muted-foreground" : "flex-1 text-sm"
-        }
-      >
-        {entry.name}
-      </span>
-      <Input
-        type="number"
-        min={1}
-        step={1}
-        defaultValue={entry.qty}
-        className="h-7 w-14 px-2 text-xs"
-        aria-label={`Quantity for ${entry.name}`}
-        onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
-      />
-      <select
-        className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-        value={locationValue(entry)}
-        onChange={(event) => onMove(entry, event.target.value)}
-        aria-label="Location"
-      >
-        <option value="loose">Loose</option>
-        <option value="with_me">With Me</option>
-        {bags.map((bag) => (
-          <option key={bag.id} value={`bag:${bag.id}`}>
-            {bag.name}
-          </option>
-        ))}
-      </select>
-      <Button variant="ghost" size="sm" onClick={() => onDelete(entry)}>
-        Remove
-      </Button>
+    <div ref={setNodeRef} style={style} className="rounded-md border bg-card px-2 py-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="cursor-grab touch-none px-1 text-muted-foreground"
+          aria-label="Reorder"
+          {...attributes}
+          {...listeners}
+        >
+          ::
+        </button>
+        <Checkbox
+          checked={entry.is_packed}
+          onCheckedChange={() => onTogglePacked(entry)}
+          aria-label={entry.is_packed ? "Mark unpacked" : "Mark packed"}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={entry.is_packed ? "text-sm line-through text-muted-foreground" : "text-sm"}
+            >
+              {entry.name}
+            </span>
+            <CategoryBadge category={entry.category} />
+          </div>
+          {nestedPath ? (
+            <span className="truncate text-xs text-muted-foreground">{nestedPath}</span>
+          ) : null}
+        </div>
+        <Input
+          type="number"
+          min={1}
+          step={1}
+          defaultValue={entry.qty}
+          className="h-7 w-14 px-2 text-xs"
+          aria-label={`Quantity for ${entry.name}`}
+          onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
+        />
+        <select
+          className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+          value={locationValue(entry)}
+          onChange={(event) => onMove(entry, event.target.value)}
+          aria-label="Location"
+        >
+          <option value="loose">Loose</option>
+          <option value="with_me">With Me</option>
+          {bags.map((bag) => (
+            <option key={bag.id} value={`bag:${bag.id}`}>
+              {bag.name}
+            </option>
+          ))}
+        </select>
+        {hasDetails ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-expanded={expanded}
+            aria-label={
+              expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
+            }
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? "Hide" : "Details"}
+          </Button>
+        ) : null}
+        <Button variant="ghost" size="sm" onClick={() => onEditDetails(entry)}>
+          Edit
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onDelete(entry)}>
+          Remove
+        </Button>
+      </div>
+      {expanded ? (
+        <div className="mt-2 flex flex-col gap-2 pl-8 text-xs text-muted-foreground">
+          {entry.image_url ? (
+            <img
+              src={entry.image_url}
+              alt={entry.name}
+              className="size-20 rounded-md border object-cover"
+            />
+          ) : null}
+          {entry.description ? <p className="whitespace-pre-wrap">{entry.description}</p> : null}
+          {entry.link ? (
+            <a
+              href={entry.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="truncate text-primary underline"
+            >
+              {entry.link}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -145,20 +244,30 @@ function EntryGroup({
   title,
   entries,
   bags,
+  unit,
+  weight,
+  limitGrams,
+  headerActions,
   onTogglePacked,
   onMove,
   onChangeQty,
   onDelete,
   onReorder,
+  onEditDetails,
 }: {
   title: string;
   entries: TripEntry[];
   bags: TripBag[];
+  unit: DisplayWeightUnit;
+  weight?: WeightTotal;
+  limitGrams?: number | null;
+  headerActions?: ReactNode;
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
   onChangeQty: (entry: TripEntry, qty: number) => void;
   onDelete: (entry: TripEntry) => void;
   onReorder: (ordered: TripEntry[]) => void;
+  onEditDetails: (entry: TripEntry) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -174,11 +283,15 @@ function EntryGroup({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm">
+        <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
           {title}
           <span className="text-xs font-normal text-muted-foreground">
             {entries.filter((entry) => entry.is_packed).length}/{entries.length} packed
           </span>
+          {weight ? (
+            <WeightSummary weight={weight} limitGrams={limitGrams ?? null} unit={unit} />
+          ) : null}
+          {headerActions ? <span className="ml-auto">{headerActions}</span> : null}
         </CardTitle>
       </CardHeader>
       <CardTable className="flex flex-col gap-2 p-4">
@@ -204,6 +317,7 @@ function EntryGroup({
                     onMove={onMove}
                     onChangeQty={onChangeQty}
                     onDelete={onDelete}
+                    onEditDetails={onEditDetails}
                   />
                 ))}
               </div>
@@ -232,6 +346,80 @@ export function TripView() {
   const [adhocName, setAdhocName] = useState("");
   const [adhocQty, setAdhocQty] = useState("1");
   const [adhocDestination, setAdhocDestination] = useState<Destination>("loose");
+
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [unit, setUnit] = useState<DisplayWeightUnit>("kg");
+  const [detailEntry, setDetailEntry] = useState<TripEntry | null>(null);
+  const [detailDescription, setDetailDescription] = useState("");
+  const [detailLink, setDetailLink] = useState("");
+  const [detailImageUrl, setDetailImageUrl] = useState("");
+  const [detailCategory, setDetailCategory] = useState<ItemCategory | "">("");
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<ShareLink | null>(null);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareExpiry, setShareExpiry] = useState<ShareExpiry>("never");
+  const [shareBusy, setShareBusy] = useState(false);
+
+  function openShare() {
+    setShareOpen(true);
+    setShareLink(null);
+    setShareUrl("");
+    setShareExpiry("never");
+    setShareBusy(true);
+    getActiveShareLink(tripId)
+      .then((link) => {
+        setShareLink(link);
+        if (link) setShareUrl(buildShareUrl(link.token, window.location.origin));
+      })
+      .catch((error: unknown) => {
+        toast.error(error instanceof Error ? error.message : "Failed to load the share link");
+      })
+      .finally(() => setShareBusy(false));
+  }
+
+  async function handleCreateShare() {
+    setShareBusy(true);
+    try {
+      const link = await createShareLink(tripId, shareExpiryToDate(shareExpiry));
+      setShareLink(link);
+      setShareUrl(buildShareUrl(link.token, window.location.origin));
+      toast.success("Share link created");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create the share link");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function handleRegenerateShare() {
+    if (!shareLink) return;
+    setShareBusy(true);
+    try {
+      const link = await regenerateShareLink(shareLink.id, {
+        expiresAt: shareExpiryToDate(shareExpiry),
+      });
+      setShareLink(link);
+      setShareUrl(buildShareUrl(link.token, window.location.origin));
+      toast.success("New share link created");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to regenerate the link");
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function handleCopyShare() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Could not copy the link");
+    }
+  }
 
   function refresh() {
     if (!tripId) return Promise.resolve();
@@ -262,13 +450,34 @@ export function TripView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tripId]);
 
+  useEffect(() => {
+    getProfile()
+      .then((profile) => {
+        if (profile?.weight_unit) setUnit(profile.weight_unit);
+      })
+      .catch(() => {});
+  }, []);
+
   const progress = useMemo(() => packingProgress(entries), [entries]);
+
+  const filteredEntries = useMemo(
+    () => filterEntriesByCategory(entries, categoryFilter),
+    [entries, categoryFilter],
+  );
 
   const {
     byBag: entriesByBag,
     withMe: withMeEntries,
     loose: looseEntries,
-  } = useMemo(() => groupEntries(entries, bags), [entries, bags]);
+  } = useMemo(() => groupEntries(filteredEntries, bags), [filteredEntries, bags]);
+
+  const searchResults = useMemo(() => searchEntries(entries, search), [entries, search]);
+
+  const categoryBreakdown = useMemo(() => weightByCategory(entries), [entries]);
+
+  const baggageTotal = useMemo(() => tripBaggageTotal(bags, entries), [bags, entries]);
+
+  const bagTree = useMemo(() => buildBagTree(bags), [bags]);
 
   async function run(action: () => Promise<unknown>, success: string) {
     try {
@@ -347,6 +556,95 @@ export function TripView() {
     void run(() => reorderEntries(ordered), "Reordered");
   }
 
+  function handleMoveBag(bag: TripBag, parentBagId: string | null) {
+    const parent = parentBagId
+      ? (bags.find((candidate) => candidate.id === parentBagId) ?? null)
+      : null;
+    void run(() => setBagParent(bag, parent), "Bag moved");
+  }
+
+  function renderBagTree(nodes: BagNode[], depth: number): ReactNode {
+    return nodes.map((node) => {
+      const descendants = bagDescendantIds(node.bag.id, bags);
+      const eligibleParents = bags.filter(
+        (candidate) => candidate.id !== node.bag.id && !descendants.has(candidate.id),
+      );
+      return (
+        <div key={node.bag.id} className="flex flex-col gap-4">
+          <EntryGroup
+            title={node.bag.name}
+            entries={entriesByBag.get(node.bag.id) ?? []}
+            bags={bags}
+            unit={unit}
+            weight={sumBagWeight(node.bag, bags, entries)}
+            limitGrams={node.bag.weight_limit_grams}
+            headerActions={
+              bags.length > 1 ? (
+                <select
+                  aria-label={`Parent bag for ${node.bag.name}`}
+                  className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+                  value={node.bag.parent_bag_id ?? ""}
+                  onChange={(event) => handleMoveBag(node.bag, event.target.value || null)}
+                >
+                  <option value="">Top level</option>
+                  {eligibleParents.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null
+            }
+            onTogglePacked={handleTogglePacked}
+            onMove={handleMove}
+            onChangeQty={handleChangeQty}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onEditDetails={openDetails}
+          />
+          {node.children.length > 0 ? (
+            <div
+              className={
+                depth < 3 ? "flex flex-col gap-4 border-l pl-3 sm:pl-4" : "flex flex-col gap-4"
+              }
+            >
+              {renderBagTree(node.children, depth + 1)}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+  }
+
+  function openDetails(entry: TripEntry) {
+    setDetailEntry(entry);
+    setDetailDescription(entry.description ?? "");
+    setDetailLink(entry.link ?? "");
+    setDetailImageUrl(entry.image_url ?? "");
+    setDetailCategory(entry.category ?? "");
+  }
+
+  async function handleSaveDetails(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!detailEntry) return;
+    setSavingDetails(true);
+    try {
+      await updateEntry(detailEntry.id, {
+        description: detailDescription.trim() || null,
+        link: detailLink.trim() || null,
+        image_url: detailImageUrl.trim() || null,
+        category: detailCategory || null,
+      });
+      toast.success("Details updated");
+      setDetailEntry(null);
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save details");
+    } finally {
+      setSavingDetails(false);
+    }
+  }
+
   if (!tripId) {
     return <p className="text-sm text-muted-foreground">No trip selected.</p>;
   }
@@ -376,7 +674,7 @@ export function TripView() {
           { label: trip.name },
         ]}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Progress
             value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
             className="h-2 w-32"
@@ -384,6 +682,22 @@ export function TripView() {
           <span className="text-xs text-muted-foreground">
             {progress.packed}/{progress.total} packed
           </span>
+          <span className="text-xs text-muted-foreground">
+            Total {formatWeight(baggageTotal.grams, unit)}
+            {baggageTotal.complete ? "" : " (incomplete)"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Switch weight unit"
+            onClick={() => setUnit(unit === "kg" ? "lb" : "kg")}
+          >
+            {unit}
+          </Button>
+          <Button type="button" size="sm" onClick={openShare}>
+            Share
+          </Button>
         </div>
       </PageHeader>
 
@@ -497,7 +811,94 @@ export function TripView() {
         </CardContent>
       </Card>
 
-      {progress.total === 0 ? (
+      <Card>
+        <CardHeader>
+          <CardHeading>
+            <CardTitle>Find an item</CardTitle>
+            <CardDescription>Search this trip to see which bag an item is in.</CardDescription>
+          </CardHeading>
+        </CardHeader>
+        <CardContent className="py-4">
+          <div className="flex items-end gap-2">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label htmlFor="trip-search">Search items</Label>
+              <Input
+                id="trip-search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="e.g. passport"
+              />
+            </div>
+            {search ? (
+              <Button type="button" variant="outline" onClick={() => setSearch("")}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      {entries.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardHeading>
+              <CardTitle>Weight by category</CardTitle>
+              <CardDescription>
+                Whole list, including With Me and unassigned items. Separate from the baggage total.
+              </CardDescription>
+            </CardHeading>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 py-4">
+            {categoryBreakdown.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No weights yet.</p>
+            ) : (
+              categoryBreakdown.map((row) => (
+                <div
+                  key={row.category ?? "uncategorised"}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span>
+                    {row.category === null ? "Uncategorised" : ITEM_CATEGORY_LABELS[row.category]}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {formatWeight(row.grams, unit)}
+                    {row.complete ? "" : " (incomplete)"}
+                  </span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {search.trim() ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">
+              {searchResults.length} {searchResults.length === 1 ? "match" : "matches"}
+            </CardTitle>
+          </CardHeader>
+          <CardTable className="flex flex-col gap-2 p-4">
+            {searchResults.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No items match &ldquo;{search}&rdquo;.
+              </p>
+            ) : (
+              searchResults.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-2"
+                >
+                  <span className="text-sm">{entry.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {entryLocationPath(entry, bags)}
+                  </span>
+                </div>
+              ))
+            )}
+          </CardTable>
+        </Card>
+      ) : progress.total === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Nothing on this list yet. Add a bag or an item above.
@@ -505,41 +906,183 @@ export function TripView() {
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {bags.map((bag) => (
-            <EntryGroup
-              key={bag.id}
-              title={bag.name}
-              entries={entriesByBag.get(bag.id) ?? []}
-              bags={bags}
-              onTogglePacked={handleTogglePacked}
-              onMove={handleMove}
-              onChangeQty={handleChangeQty}
-              onDelete={handleDelete}
-              onReorder={handleReorder}
-            />
-          ))}
-          <EntryGroup
-            title="With Me"
-            entries={withMeEntries}
-            bags={bags}
-            onTogglePacked={handleTogglePacked}
-            onMove={handleMove}
-            onChangeQty={handleChangeQty}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
+          <CategoryFilterChips
+            entries={entries}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            label="Filter entries by category"
           />
-          <EntryGroup
-            title="Not assigned"
-            entries={looseEntries}
-            bags={bags}
-            onTogglePacked={handleTogglePacked}
-            onMove={handleMove}
-            onChangeQty={handleChangeQty}
-            onDelete={handleDelete}
-            onReorder={handleReorder}
-          />
+          {filteredEntries.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No entries in this category.
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {renderBagTree(bagTree, 0)}
+              <EntryGroup
+                title="With Me"
+                entries={withMeEntries}
+                bags={bags}
+                unit={unit}
+                onTogglePacked={handleTogglePacked}
+                onMove={handleMove}
+                onChangeQty={handleChangeQty}
+                onDelete={handleDelete}
+                onReorder={handleReorder}
+                onEditDetails={openDetails}
+              />
+              <EntryGroup
+                title="Not assigned"
+                entries={looseEntries}
+                bags={bags}
+                unit={unit}
+                onTogglePacked={handleTogglePacked}
+                onMove={handleMove}
+                onChangeQty={handleChangeQty}
+                onDelete={handleDelete}
+                onReorder={handleReorder}
+                onEditDetails={openDetails}
+              />
+            </>
+          )}
         </div>
       )}
+
+      <Dialog open={detailEntry !== null} onOpenChange={(open) => !open && setDetailEntry(null)}>
+        <DialogContent>
+          <form onSubmit={handleSaveDetails}>
+            <DialogHeader>
+              <DialogTitle>Item details</DialogTitle>
+              <DialogDescription>
+                Details are copied onto this trip and do not change your library.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail-category">Category</Label>
+                <select
+                  id="detail-category"
+                  className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                  value={detailCategory}
+                  onChange={(event) => setDetailCategory(event.target.value as ItemCategory | "")}
+                >
+                  <option value="">Uncategorised</option>
+                  {ITEM_CATEGORY_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.categories.map((value) => (
+                        <option key={value} value={value}>
+                          {ITEM_CATEGORY_LABELS[value]}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail-description">Description</Label>
+                <Textarea
+                  id="detail-description"
+                  value={detailDescription}
+                  onChange={(event) => setDetailDescription(event.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail-link">Link</Label>
+                <Input
+                  id="detail-link"
+                  inputMode="url"
+                  value={detailLink}
+                  onChange={(event) => setDetailLink(event.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="detail-image">Image URL</Label>
+                <Input
+                  id="detail-image"
+                  inputMode="url"
+                  value={detailImageUrl}
+                  onChange={(event) => setDetailImageUrl(event.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDetailEntry(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingDetails}>
+                {savingDetails ? "Saving..." : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share this trip</DialogTitle>
+            <DialogDescription>
+              Anyone with the link can view this packing list read-only. They cannot change it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            {shareLink ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="share-url">Link</Label>
+                <Input id="share-url" readOnly value={shareUrl} />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {shareBusy ? "Loading..." : "No link yet. Create one to share this list."}
+              </p>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="share-expiry">Expires</Label>
+              <select
+                id="share-expiry"
+                className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                value={shareExpiry}
+                onChange={(event) => setShareExpiry(event.target.value as ShareExpiry)}
+              >
+                {SHARE_EXPIRY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShareOpen(false)}>
+              Done
+            </Button>
+            {shareLink ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleRegenerateShare()}
+                  disabled={shareBusy}
+                >
+                  Regenerate
+                </Button>
+                <Button type="button" onClick={() => void handleCopyShare()}>
+                  Copy link
+                </Button>
+              </>
+            ) : (
+              <Button type="button" onClick={() => void handleCreateShare()} disabled={shareBusy}>
+                Create link
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

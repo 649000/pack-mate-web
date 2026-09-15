@@ -6,6 +6,7 @@ import type { ReusableBag } from "@/lib/types";
 vi.mock("@/lib/data", () => ({
   listBags: vi.fn(),
   listItems: vi.fn(),
+  getProfile: vi.fn(),
   createBag: vi.fn(),
   updateBag: vi.fn(),
   deleteBag: vi.fn(),
@@ -25,12 +26,14 @@ const bag: ReusableBag = {
   id: "b1",
   user_id: "u1",
   name: "Electronics",
+  weight_limit_grams: null,
   created_at: "2026-01-01T00:00:00Z",
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(data.listItems).mockResolvedValue([]);
+  vi.mocked(data.getProfile).mockResolvedValue(null);
   vi.mocked(data.listBagContents).mockResolvedValue([]);
 });
 
@@ -58,7 +61,32 @@ describe("BagsView", () => {
     await user.type(await screen.findByLabelText("Name"), "Electronics");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() => expect(data.createBag).toHaveBeenCalledWith({ name: "Electronics" }));
+    await waitFor(() =>
+      expect(data.createBag).toHaveBeenCalledWith({ name: "Electronics", weightLimitGrams: null }),
+    );
+  });
+
+  it("creates a bag with a weight limit in the preferred unit", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([]);
+    vi.mocked(data.createBag).mockResolvedValue(bag);
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText(/no bags yet/i);
+
+    await user.click(screen.getByRole("button", { name: /add bag/i }));
+    await user.type(await screen.findByLabelText("Name"), "Main");
+    await user.type(screen.getByLabelText(/weight limit \(kg\)/i), "23");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(data.createBag).toHaveBeenCalledWith({ name: "Main", weightLimitGrams: 23000 }),
+    );
+  });
+
+  it("shows a bag's weight limit", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([{ ...bag, weight_limit_grams: 23000 }]);
+    render(<BagsView />);
+    expect(await screen.findByText("Limit 23.00 kg")).toBeInTheDocument();
   });
 
   it("opens a bag's default contents", async () => {
@@ -85,7 +113,12 @@ describe("BagsView", () => {
     await user.type(name, "Gear");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    await waitFor(() => expect(data.updateBag).toHaveBeenCalledWith("b1", { name: "Gear" }));
+    await waitFor(() =>
+      expect(data.updateBag).toHaveBeenCalledWith("b1", {
+        name: "Gear",
+        weightLimitGrams: null,
+      }),
+    );
   });
 
   it("deletes a bag after confirmation", async () => {
