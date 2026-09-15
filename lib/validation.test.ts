@@ -1,15 +1,26 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
+  ITEM_CATEGORIES,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_WEIGHT_GRAMS,
   ValidationError,
   parseQty,
   validateBirthday,
+  validateCategory,
   validateDateRange,
   validateEmail,
   validateGender,
   validateName,
+  validateOptionalDescription,
   validateOptionalName,
+  validateOptionalUrl,
   validatePassword,
   validateQty,
+  validateWeight,
+  validateWeightLimit,
+  validateWeightUnit,
 } from "./validation";
 
 describe("validateName", () => {
@@ -90,6 +101,99 @@ describe("validateOptionalName", () => {
   });
 });
 
+describe("validateOptionalUrl", () => {
+  it("accepts http and https URLs", () => {
+    expect(validateOptionalUrl("https://example.com/item")).toBe("https://example.com/item");
+    expect(validateOptionalUrl("  http://example.com  ")).toBe("http://example.com");
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateOptionalUrl("")).toBeNull();
+    expect(validateOptionalUrl("   ")).toBeNull();
+    expect(validateOptionalUrl(null)).toBeNull();
+    expect(validateOptionalUrl(undefined)).toBeNull();
+  });
+
+  it("rejects non-http(s) URLs", () => {
+    expect(() => validateOptionalUrl("javascript:alert(1)")).toThrow(ValidationError);
+    expect(() => validateOptionalUrl("data:text/html,x")).toThrow(ValidationError);
+    expect(() => validateOptionalUrl("example.com")).toThrow(ValidationError);
+    expect(() => validateOptionalUrl("ftp://example.com")).toThrow(ValidationError);
+  });
+});
+
+describe("validateOptionalDescription", () => {
+  it("trims and returns a description", () => {
+    expect(validateOptionalDescription("  Navy cover  ")).toBe("Navy cover");
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateOptionalDescription("")).toBeNull();
+    expect(validateOptionalDescription("   ")).toBeNull();
+    expect(validateOptionalDescription(null)).toBeNull();
+  });
+
+  it("rejects a description beyond the maximum length", () => {
+    expect(validateOptionalDescription("a".repeat(MAX_DESCRIPTION_LENGTH))).toHaveLength(
+      MAX_DESCRIPTION_LENGTH,
+    );
+    expect(() => validateOptionalDescription("a".repeat(MAX_DESCRIPTION_LENGTH + 1))).toThrow(
+      ValidationError,
+    );
+  });
+});
+
+describe("validateWeight", () => {
+  it("accepts zero and positive numbers", () => {
+    expect(validateWeight(0)).toBe(0);
+    expect(validateWeight(1200)).toBe(1200);
+  });
+
+  it("returns null for null and undefined", () => {
+    expect(validateWeight(null)).toBeNull();
+    expect(validateWeight(undefined)).toBeNull();
+  });
+
+  it("rejects negative, non-numeric and excessive values", () => {
+    expect(() => validateWeight(-1)).toThrow(ValidationError);
+    expect(() => validateWeight(Number.NaN)).toThrow(ValidationError);
+    expect(() => validateWeight(Number.POSITIVE_INFINITY)).toThrow(ValidationError);
+    expect(() => validateWeight(MAX_WEIGHT_GRAMS + 1)).toThrow(ValidationError);
+  });
+
+  it("uses the field label in the error", () => {
+    expect(() => validateWeight(-1, "Weight limit")).toThrow(/weight limit/i);
+  });
+});
+
+describe("validateWeightLimit", () => {
+  it("accepts a valid limit and null", () => {
+    expect(validateWeightLimit(23000)).toBe(23000);
+    expect(validateWeightLimit(null)).toBeNull();
+  });
+
+  it("rejects invalid limits", () => {
+    expect(() => validateWeightLimit(-1)).toThrow(/weight limit/i);
+    expect(() => validateWeightLimit(MAX_WEIGHT_GRAMS + 1)).toThrow(ValidationError);
+  });
+});
+
+describe("validateWeightUnit", () => {
+  it("accepts kg and lb", () => {
+    expect(validateWeightUnit("kg")).toBe("kg");
+    expect(validateWeightUnit("lb")).toBe("lb");
+  });
+
+  it("defaults blank input to kg", () => {
+    expect(validateWeightUnit("")).toBe("kg");
+    expect(validateWeightUnit(null)).toBe("kg");
+  });
+
+  it("rejects unknown units", () => {
+    expect(() => validateWeightUnit("stone")).toThrow(ValidationError);
+  });
+});
+
 describe("validateBirthday", () => {
   it("accepts an ISO date in the past", () => {
     expect(validateBirthday("1990-05-28")).toBe("1990-05-28");
@@ -124,6 +228,51 @@ describe("validateGender", () => {
 
   it("rejects a value outside the allowed set", () => {
     expect(() => validateGender("unknown")).toThrow(ValidationError);
+  });
+});
+
+describe("validateCategory", () => {
+  it("accepts every category in the fixed set", () => {
+    for (const category of ITEM_CATEGORIES) {
+      expect(validateCategory(category)).toBe(category);
+    }
+  });
+
+  it("returns null for blank input", () => {
+    expect(validateCategory("")).toBeNull();
+    expect(validateCategory("   ")).toBeNull();
+    expect(validateCategory(null)).toBeNull();
+    expect(validateCategory(undefined)).toBeNull();
+  });
+
+  it("trims a valid value", () => {
+    expect(validateCategory("  clothing  ")).toBe("clothing");
+  });
+
+  it("rejects a value outside the allowed set", () => {
+    expect(() => validateCategory("other")).toThrow(ValidationError);
+    expect(() => validateCategory("unknown")).toThrow(/valid category/i);
+  });
+});
+
+describe("ITEM_CATEGORIES", () => {
+  const migration = readFileSync(
+    resolve(process.cwd(), "supabase/migrations/20260915040000_item_categories.sql"),
+    "utf8",
+  );
+
+  function constraintCategories(sql: string): string[][] {
+    return [...sql.matchAll(/category is null or category in \(([^)]*)\)/g)].map((match) =>
+      [...match[1].matchAll(/'([^']+)'/g)].map((value) => value[1]),
+    );
+  }
+
+  it("matches the values allowed by both database check constraints", () => {
+    const groups = constraintCategories(migration);
+    expect(groups).toHaveLength(2);
+    for (const group of groups) {
+      expect([...group].sort()).toEqual([...ITEM_CATEGORIES].sort());
+    }
   });
 });
 

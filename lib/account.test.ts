@@ -23,6 +23,7 @@ const emptyData: ExportedData = {
   trips: [],
   trip_bags: [],
   trip_entries: [],
+  share_links: [],
 };
 
 describe("linked providers", () => {
@@ -56,5 +57,22 @@ describe("buildExportPayload", () => {
   it("is serialisable to JSON", () => {
     const payload = buildExportPayload(emptyData, "2026-09-14T00:00:00.000Z");
     expect(() => JSON.stringify(payload)).not.toThrow();
+  });
+
+  it("includes share links", () => {
+    const link = {
+      id: "s1",
+      trip_id: "t1",
+      user_id: "u1",
+      token: "a".repeat(64),
+      created_at: "2026-09-14T00:00:00.000Z",
+      expires_at: null,
+      revoked_at: null,
+    };
+    const payload = buildExportPayload(
+      { ...emptyData, share_links: [link] },
+      "2026-09-14T00:00:00.000Z",
+    );
+    expect(payload.share_links).toEqual([link]);
   });
 });

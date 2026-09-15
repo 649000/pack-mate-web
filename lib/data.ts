@@ -1,9 +1,12 @@
 import { supabase } from "./supabase";
 import { getFirebaseAuth } from "./firebase";
 import type {
+  ItemCategory,
   ReusableBag,
   ReusableBagItem,
   ReusableItem,
+  ShareLink,
+  SharedTrip,
   Trip,
   TripBag,
   TripEntry,
@@ -11,11 +14,17 @@ import type {
 } from "./types";
 import {
   validateBirthday,
+  validateCategory,
   validateDateRange,
   validateGender,
   validateName,
+  validateOptionalDescription,
   validateOptionalName,
+  validateOptionalUrl,
   validateQty,
+  validateWeight,
+  validateWeightLimit,
+  validateWeightUnit,
 } from "./validation";
 
 function unwrap<T>(data: T | null, error: { message: string } | null): T {
@@ -37,15 +46,45 @@ export async function listItems(): Promise<ReusableItem[]> {
   return (data ?? []) as ReusableItem[];
 }
 
-export async function createItem(input: {
-  name: string;
-  defaultQty: number;
-}): Promise<ReusableItem> {
+export type ItemDetails = {
+  description: string | null;
+  link: string | null;
+  imageUrl: string | null;
+  weightGrams: number | null;
+  category: ItemCategory | null;
+};
+
+function validateItemDetails(input: {
+  description?: string | null;
+  link?: string | null;
+  imageUrl?: string | null;
+  weightGrams?: number | null;
+  category?: string | null;
+}): {
+  description: string | null;
+  link: string | null;
+  image_url: string | null;
+  weight_grams: number | null;
+  category: ItemCategory | null;
+} {
+  return {
+    description: validateOptionalDescription(input.description),
+    link: validateOptionalUrl(input.link, "Link"),
+    image_url: validateOptionalUrl(input.imageUrl, "Image URL"),
+    weight_grams: validateWeight(input.weightGrams),
+    category: validateCategory(input.category),
+  };
+}
+
+export async function createItem(
+  input: { name: string; defaultQty: number } & Partial<ItemDetails>,
+): Promise<ReusableItem> {
   const name = validateName(input.name, "Item name");
   const defaultQty = validateQty(input.defaultQty, "Default quantity");
+  const details = validateItemDetails(input);
   const { data, error } = await supabase
     .from("reusable_items")
-    .insert({ name, default_qty: defaultQty })
+    .insert({ name, default_qty: defaultQty, ...details })
     .select()
     .single();
   return unwrap(data as ReusableItem | null, error);
@@ -53,13 +92,14 @@ export async function createItem(input: {
 
 export async function updateItem(
   id: string,
-  input: { name: string; defaultQty: number },
+  input: { name: string; defaultQty: number } & Partial<ItemDetails>,
 ): Promise<ReusableItem> {
   const name = validateName(input.name, "Item name");
   const defaultQty = validateQty(input.defaultQty, "Default quantity");
+  const details = validateItemDetails(input);
   const { data, error } = await supabase
     .from("reusable_items")
-    .update({ name, default_qty: defaultQty })
+    .update({ name, default_qty: defaultQty, ...details })
     .eq("id", id)
     .select()
     .single();
@@ -84,17 +124,29 @@ export async function listBags(): Promise<ReusableBag[]> {
   return (data ?? []) as ReusableBag[];
 }
 
-export async function createBag(input: { name: string }): Promise<ReusableBag> {
+export async function createBag(input: {
+  name: string;
+  weightLimitGrams?: number | null;
+}): Promise<ReusableBag> {
   const name = validateName(input.name, "Bag name");
-  const { data, error } = await supabase.from("reusable_bags").insert({ name }).select().single();
+  const weight_limit_grams = validateWeightLimit(input.weightLimitGrams);
+  const { data, error } = await supabase
+    .from("reusable_bags")
+    .insert({ name, weight_limit_grams })
+    .select()
+    .single();
   return unwrap(data as ReusableBag | null, error);
 }
 
-export async function updateBag(id: string, input: { name: string }): Promise<ReusableBag> {
+export async function updateBag(
+  id: string,
+  input: { name: string; weightLimitGrams?: number | null },
+): Promise<ReusableBag> {
   const name = validateName(input.name, "Bag name");
+  const weight_limit_grams = validateWeightLimit(input.weightLimitGrams);
   const { data, error } = await supabase
     .from("reusable_bags")
-    .update({ name })
+    .update({ name, weight_limit_grams })
     .eq("id", id)
     .select()
     .single();
@@ -264,12 +316,38 @@ export async function addAdHocEntry(input: {
 export async function updateEntry(
   id: string,
   patch: Partial<
-    Pick<TripEntry, "name" | "qty" | "trip_bag_id" | "is_with_me" | "is_packed" | "position">
+    Pick<
+      TripEntry,
+      | "name"
+      | "qty"
+      | "trip_bag_id"
+      | "is_with_me"
+      | "is_packed"
+      | "position"
+      | "description"
+      | "link"
+      | "image_url"
+      | "weight_grams"
+      | "category"
+    >
   >,
 ): Promise<TripEntry> {
   const clean: typeof patch = { ...patch };
   if (clean.name !== undefined) clean.name = validateName(clean.name, "Item name");
   if (clean.qty !== undefined) clean.qty = validateQty(clean.qty);
+  if (clean.description !== undefined) {
+    clean.description = validateOptionalDescription(clean.description);
+  }
+  if (clean.link !== undefined) clean.link = validateOptionalUrl(clean.link, "Link");
+  if (clean.image_url !== undefined) {
+    clean.image_url = validateOptionalUrl(clean.image_url, "Image URL");
+  }
+  if (clean.weight_grams !== undefined) {
+    clean.weight_grams = validateWeight(clean.weight_grams);
+  }
+  if (clean.category !== undefined) {
+    clean.category = validateCategory(clean.category);
+  }
   const { data, error } = await supabase
     .from("trip_entries")
     .update(clean)
@@ -313,6 +391,103 @@ export async function reorderTripBags(ordered: TripBag[]): Promise<void> {
   );
 }
 
+export async function setBagParent(bag: TripBag, parent: TripBag | null): Promise<TripBag> {
+  if (parent && parent.trip_id !== bag.trip_id) {
+    throw new Error("A bag can only be nested inside a bag from the same trip");
+  }
+  const { data, error } = await supabase
+    .from("trip_bags")
+    .update({ parent_bag_id: parent?.id ?? null })
+    .eq("id", bag.id)
+    .select()
+    .single();
+  return unwrap(data as TripBag | null, error);
+}
+
+// ---------------------------------------------------------------------------
+// Sharing
+// ---------------------------------------------------------------------------
+
+export async function listShareLinks(): Promise<ShareLink[]> {
+  const { data, error } = await supabase
+    .from("share_links")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ShareLink[];
+}
+
+function isLinkExpired(link: ShareLink): boolean {
+  return link.expires_at !== null && new Date(link.expires_at).getTime() <= Date.now();
+}
+
+export async function getActiveShareLink(tripId: string): Promise<ShareLink | null> {
+  const { data, error } = await supabase
+    .from("share_links")
+    .select("*")
+    .eq("trip_id", tripId)
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as ShareLink | null) ?? null;
+}
+
+// A trip has at most one active link. Reuse it while it is still valid;
+// otherwise revoke the stale one and mint a new token, so an expired URL can
+// never be resurrected.
+export async function createShareLink(
+  tripId: string,
+  expiresAt: string | null = null,
+): Promise<ShareLink> {
+  const existing = await getActiveShareLink(tripId);
+
+  if (existing) {
+    if (!isLinkExpired(existing)) return existing;
+    await revokeShareLink(existing.id);
+  }
+
+  const { data, error } = await supabase
+    .from("share_links")
+    .insert({ trip_id: tripId, expires_at: expiresAt })
+    .select()
+    .single();
+  return unwrap(data as ShareLink | null, error);
+}
+
+export async function revokeShareLink(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("share_links")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function regenerateShareLink(
+  id: string,
+  options: { expiresAt?: string | null } = {},
+): Promise<ShareLink> {
+  const { data: current, error: currentError } = await supabase
+    .from("share_links")
+    .select("*")
+    .eq("id", id)
+    .single();
+  const link = unwrap(current as ShareLink | null, currentError);
+  const expiresAt = "expiresAt" in options ? (options.expiresAt ?? null) : link.expires_at;
+  await revokeShareLink(link.id);
+  const { data, error } = await supabase
+    .from("share_links")
+    .insert({ trip_id: link.trip_id, expires_at: expiresAt })
+    .select()
+    .single();
+  return unwrap(data as ShareLink | null, error);
+}
+
+export async function getSharedTrip(token: string): Promise<SharedTrip | null> {
+  const { data, error } = await supabase.rpc("get_shared_trip", { p_token: token });
+  if (error) throw new Error(error.message);
+  return (data as SharedTrip | null) ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
@@ -327,10 +502,12 @@ export async function upsertProfile(input: {
   displayName: string | null;
   birthday: string | null;
   gender: string | null;
+  weightUnit?: string | null;
 }): Promise<UserProfile> {
   const displayName = validateOptionalName(input.displayName);
   const birthday = validateBirthday(input.birthday);
   const gender = validateGender(input.gender);
+  const weight_unit = validateWeightUnit(input.weightUnit);
   const uid = getFirebaseAuth().currentUser?.uid;
   if (!uid) throw new Error("You must be signed in to update your profile");
   const { data, error } = await supabase
@@ -341,6 +518,7 @@ export async function upsertProfile(input: {
         display_name: displayName,
         birthday,
         gender,
+        weight_unit,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" },
@@ -362,6 +540,7 @@ export type ExportedData = {
   trips: Trip[];
   trip_bags: TripBag[];
   trip_entries: TripEntry[];
+  share_links: ShareLink[];
 };
 
 export async function listAllBagItems(): Promise<ReusableBagItem[]> {
@@ -383,15 +562,17 @@ export async function listAllTripEntries(): Promise<TripEntry[]> {
 }
 
 export async function collectUserData(): Promise<ExportedData> {
-  const [profile, items, bags, bagItems, trips, tripBags, tripEntries] = await Promise.all([
-    getProfile(),
-    listItems(),
-    listBags(),
-    listAllBagItems(),
-    listTrips(),
-    listAllTripBags(),
-    listAllTripEntries(),
-  ]);
+  const [profile, items, bags, bagItems, trips, tripBags, tripEntries, shareLinks] =
+    await Promise.all([
+      getProfile(),
+      listItems(),
+      listBags(),
+      listAllBagItems(),
+      listTrips(),
+      listAllTripBags(),
+      listAllTripEntries(),
+      listShareLinks(),
+    ]);
 
   return {
     profile,
@@ -401,6 +582,7 @@ export async function collectUserData(): Promise<ExportedData> {
     trips,
     trip_bags: tripBags,
     trip_entries: tripEntries,
+    share_links: shareLinks,
   };
 }
 

@@ -279,6 +279,7 @@ export function buildExportPayload(data: ExportedData, exportedAt: string): Expo
     trips: data.trips,
     trip_bags: data.trip_bags,
     trip_entries: data.trip_entries,
+    share_links: data.share_links,
   };
 }
 
