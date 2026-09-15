@@ -115,7 +115,7 @@ The system SHALL let an authenticated user unlink their Google sign-in, and MUST
 - **THEN** the system reports that there is nothing to unlink
 
 ### Requirement: User can export their data
-The system SHALL let an authenticated user download their data as a single JSON file containing their profile, trips, bags, items and packing-list entries.
+The system SHALL let an authenticated user download their data as a single JSON file containing their profile, trips, bags, items, packing-list entries and share links.
 
 #### Scenario: Export data
 - **WHEN** an authenticated user requests an export
@@ -124,6 +124,10 @@ The system SHALL let an authenticated user download their data as a single JSON 
 #### Scenario: Export contains only own data
 - **WHEN** a user exports their data
 - **THEN** the file contains only data owned by that user
+
+#### Scenario: Export includes share links
+- **WHEN** a user who has public share links requests an export
+- **THEN** the file includes those share links
 
 #### Scenario: Export with no data
 - **WHEN** a user with no trips, bags or items requests an export
@@ -169,3 +173,22 @@ The system SHALL let an authenticated user link Google to their account, and SHA
 #### Scenario: Google credential belongs to another account
 - **WHEN** the Google account the user chooses is already linked to a different account
 - **THEN** the system does not link it and explains the conflict
+
+### Requirement: User can choose a weight unit
+The system SHALL let an authenticated user choose their preferred weight unit, kilograms or pounds, defaulting to kilograms. The preference affects how weights are entered and displayed; stored weights remain canonical grams.
+
+#### Scenario: Default unit is kilograms
+- **WHEN** an authenticated user has never chosen a unit
+- **THEN** the system uses kilograms for entry and display
+
+#### Scenario: Change the unit
+- **WHEN** an authenticated user selects pounds
+- **THEN** the system stores the preference and uses pounds for entry and display
+
+#### Scenario: Preference persists
+- **WHEN** an authenticated user returns after choosing a unit
+- **THEN** the system uses their saved unit
+
+#### Scenario: Preference applies across trips
+- **WHEN** an authenticated user with a saved unit opens any trip
+- **THEN** weights are shown in that unit unless the trip view's toggle is changed

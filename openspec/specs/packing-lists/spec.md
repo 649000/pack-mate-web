@@ -50,10 +50,14 @@ The system SHALL allow a user to change the quantity of a trip entry.
 - **THEN** the entry shows the new quantity
 
 ### Requirement: Reorder bags and items
-The system SHALL allow a user to reorder bags and items within a trip by dragging, and SHALL preserve that order.
+The system SHALL allow a user to reorder bags and items within a trip by dragging, and SHALL preserve that order. Bags SHALL be reordered among their siblings at the same level of nesting.
 
 #### Scenario: Reorder items in a bag
 - **WHEN** a user drags an item to a new position within a bag
+- **THEN** the new order is saved and shown on reload
+
+#### Scenario: Reorder sibling bags
+- **WHEN** a user drags a nested bag to a new position among its siblings
 - **THEN** the new order is saved and shown on reload
 
 ### Requirement: Mark items packed
@@ -84,3 +88,239 @@ The system SHALL allow a user to remove an entry from a trip without affecting t
 #### Scenario: Remove an entry
 - **WHEN** a user removes a trip entry
 - **THEN** the entry is removed from the trip and the library is unchanged
+
+### Requirement: Copy item details onto a trip
+The system SHALL copy a reusable item's description, link, and image URL onto the trip entry when the item is added to a trip, including items added as part of a bag's default contents. Editing a trip entry's details SHALL NOT change the library item.
+
+#### Scenario: Add an item with details to a trip
+- **WHEN** a user adds a library item that has a description, link, or image URL to a trip
+- **THEN** the trip entry carries copies of those details
+
+#### Scenario: Add a bag with default contents
+- **WHEN** a user adds a library bag whose default contents include items with details
+- **THEN** the copied trip entries carry those details
+
+#### Scenario: Editing a trip entry's details does not change the library
+- **WHEN** a user edits the details of a trip entry
+- **THEN** the corresponding library item is unchanged
+
+### Requirement: Find an entry in a trip
+The system SHALL allow a user to search the entries of a trip by name and SHALL show, for each match, where the entry is located: inside a bag, marked With Me, or unassigned.
+
+#### Scenario: Search finds entries by name
+- **WHEN** a user types part of an entry's name in the trip search
+- **THEN** the system shows the trip entries whose name matches, ignoring letter case
+
+#### Scenario: Result shows the entry's location
+- **WHEN** the system shows a matching entry
+- **THEN** the result shows the bag name, "With Me", or an unassigned label as appropriate
+
+#### Scenario: No matches
+- **WHEN** a user searches for text that matches no entry in the trip
+- **THEN** the system shows an empty result state
+
+#### Scenario: Clearing the search
+- **WHEN** a user clears the search
+- **THEN** the system shows the trip without the search filter applied
+
+### Requirement: Copy item weight onto a trip
+The system SHALL copy a reusable item's weight onto the trip entry when the item is added to a trip, including items added as part of a bag's default contents. Editing a trip entry's weight SHALL NOT change the library item.
+
+#### Scenario: Add an item with weight to a trip
+- **WHEN** a user adds a library item that has a weight to a trip
+- **THEN** the trip entry carries a copy of that weight
+
+#### Scenario: Add a bag with default contents
+- **WHEN** a user adds a library bag whose default contents include weighted items
+- **THEN** the copied trip entries carry those weights
+
+#### Scenario: Editing a trip entry's weight does not change the library
+- **WHEN** a user changes the weight of a trip entry
+- **THEN** the corresponding library item is unchanged
+
+### Requirement: Track a bag's weight against its limit
+The system SHALL show each trip bag's total weight and, when the bag has a limit, whether it is under or over that limit. A bag's weight SHALL be the sum of its entries' unit weight multiplied by quantity. Entries marked With Me and unassigned entries SHALL NOT count toward a bag's weight.
+
+#### Scenario: Bag weight is the sum of its entries
+- **WHEN** a bag contains entries with weights and quantities
+- **THEN** the bag's weight is the sum of each entry's unit weight multiplied by its quantity
+
+#### Scenario: With Me and unassigned entries are excluded
+- **WHEN** a trip has entries marked With Me or left unassigned
+- **THEN** those entries do not contribute to any bag's weight
+
+#### Scenario: Under the limit
+- **WHEN** a bag with a limit weighs less than its limit
+- **THEN** the system shows the bag as under its limit
+
+#### Scenario: Over the limit
+- **WHEN** a bag with a limit weighs more than its limit
+- **THEN** the system shows the bag as over its limit
+
+#### Scenario: No limit set
+- **WHEN** a bag has no limit
+- **THEN** the system shows its weight without an under or over state
+
+#### Scenario: Entries without weight
+- **WHEN** some entries in a bag have no weight
+- **THEN** the bag's weight sums the entries that do have a weight and the system marks the total as incomplete
+
+### Requirement: View total baggage weight
+The system SHALL show the trip's total baggage weight as the sum of all its bags' weights. Entries marked With Me or unassigned SHALL NOT count toward the total.
+
+#### Scenario: Total reflects all bags
+- **WHEN** a trip has multiple bags with weights
+- **THEN** the total baggage weight is the sum of those bags' weights
+
+#### Scenario: Total with no weights
+- **WHEN** no entry in the trip has a weight
+- **THEN** the system shows a total of zero and does not present it as a final weight
+
+### Requirement: Switch the displayed weight unit
+The system SHALL allow a user to switch the unit used to display weights on a trip without changing their saved preference.
+
+#### Scenario: Toggle the unit
+- **WHEN** a user switches the trip's displayed unit between kg and lb
+- **THEN** all weights on the trip are shown in the selected unit
+
+#### Scenario: Toggle does not change the saved preference
+- **WHEN** a user switches the trip's displayed unit
+- **THEN** their saved account preference is unchanged
+
+### Requirement: Copy item category onto a trip
+
+The system SHALL copy a reusable item's category onto the trip entry when the item is added to a trip, including items added as part of a bag's default contents. Editing a trip entry's category SHALL NOT change the library item.
+
+#### Scenario: Add an item with a category to a trip
+
+- **WHEN** a user adds a library item that has a category to a trip
+- **THEN** the trip entry carries a copy of that category
+
+#### Scenario: Add a bag with default contents
+
+- **WHEN** a user adds a library bag whose default contents include categorised items
+- **THEN** the copied trip entries carry those categories
+
+#### Scenario: Add an uncategorised item
+
+- **WHEN** a user adds a library item that has no category to a trip
+- **THEN** the trip entry is uncategorised
+
+#### Scenario: Editing a trip entry's category does not change the library
+
+- **WHEN** a user changes the category of a trip entry
+- **THEN** the corresponding library item is unchanged
+
+### Requirement: Filter entries by category
+
+The system SHALL allow a user to filter a trip's entries by category, showing only entries in the selected category. The filter SHALL offer only the categories present in the trip, plus an option for uncategorised entries. Filtering MUST NOT change any entry and MUST NOT affect bag, With Me or unassigned grouping.
+
+#### Scenario: Filter by a category
+
+- **WHEN** a user selects a category in the trip view
+- **THEN** the system shows only the trip entries in that category
+
+#### Scenario: Filter spans locations
+
+- **WHEN** a user filters by a category whose entries are spread across a bag, With Me and unassigned
+- **THEN** the system shows all matching entries regardless of their location
+
+#### Scenario: Offer only categories in use
+
+- **WHEN** a user opens the trip filter
+- **THEN** the system offers only the categories present in the trip, plus an uncategorised option when such entries exist
+
+#### Scenario: Clear the trip filter
+
+- **WHEN** a user clears the category filter
+- **THEN** the system shows the trip without the filter applied
+
+#### Scenario: No entries in a category
+
+- **WHEN** a user selects a category with no entries
+- **THEN** the system shows an empty result state
+
+### Requirement: View weight by category
+
+The system SHALL show a trip's weight grouped by category. Each category's weight SHALL be the sum of its entries' unit weight multiplied by quantity. The breakdown SHALL cover the whole list, including entries marked With Me and unassigned entries. Entries with no category SHALL be grouped as uncategorised. The system SHALL mark the breakdown as incomplete when any counted entry has no weight, and SHALL distinguish this breakdown from the baggage total.
+
+#### Scenario: Weight summed per category
+
+- **WHEN** a trip has entries with weights in more than one category
+- **THEN** the breakdown shows each category's weight as the sum of its entries' unit weight multiplied by quantity
+
+#### Scenario: Whole list is included
+
+- **WHEN** a trip has entries marked With Me or left unassigned
+- **THEN** those entries contribute to their category's weight in the breakdown
+
+#### Scenario: Uncategorised entries are grouped
+
+- **WHEN** a trip has entries with no category
+- **THEN** their weight is shown under an uncategorised grouping
+
+#### Scenario: Incomplete weight is marked
+
+- **WHEN** some counted entries have no weight
+- **THEN** the system marks the breakdown as incomplete
+
+#### Scenario: No weights
+
+- **WHEN** no entry in the trip has a weight
+- **THEN** the system shows a breakdown of zero and does not present it as a final weight
+
+### Requirement: Nest a bag inside another bag
+The system SHALL allow a trip bag to belong to another trip bag, at most one parent, and SHALL allow a nested bag to be moved back to the top level. Library bags SHALL NOT be nested.
+
+#### Scenario: Move a bag into another bag
+- **WHEN** a user assigns a trip bag to a parent trip bag
+- **THEN** the bag is shown inside its parent
+
+#### Scenario: Move a bag to the top level
+- **WHEN** a user removes a trip bag's parent
+- **THEN** the bag is shown at the top level
+
+#### Scenario: A bag cannot contain itself or its own descendant
+- **WHEN** a user tries to assign a bag to itself or to one of its descendants
+- **THEN** the system rejects the change and leaves the nesting unchanged
+
+#### Scenario: A parent must belong to the same trip
+- **WHEN** a user tries to assign a trip bag to a bag from another trip
+- **THEN** the system rejects the change
+
+### Requirement: Show nested bags as a tree
+The system SHALL display trip bags as a tree that reflects their nesting.
+
+#### Scenario: Nested bags are shown under their parent
+- **WHEN** a trip has nested bags
+- **THEN** each bag is shown under its parent and its entries are grouped with it
+
+### Requirement: Show an entry's full location path
+The system SHALL show an entry's location as the full path of bags that contain it, or as With Me or unassigned.
+
+#### Scenario: Entry inside nested bags
+- **WHEN** an entry is inside a bag that is inside another bag
+- **THEN** the system shows the location as the chain of bag names from the outermost bag to the innermost
+
+#### Scenario: Entry at the top level of a bag
+- **WHEN** an entry is inside a top-level bag
+- **THEN** the system shows that bag's name
+
+#### Scenario: Entry not in a bag
+- **WHEN** an entry is marked With Me or is unassigned
+- **THEN** the system shows With Me or the unassigned label
+
+### Requirement: Include nested bags in bag weight
+When a bag has a weight, the system SHALL include the weight of bags nested inside it, counting each entry exactly once. The trip's total baggage weight SHALL sum only top-level bags.
+
+#### Scenario: Parent weight includes nested bags
+- **WHEN** a bag contains entries and also contains a nested bag with entries
+- **THEN** the parent bag's weight is the sum of its own entries plus the nested bag's weight
+
+#### Scenario: Trip total counts each entry once
+- **WHEN** a trip has nested bags
+- **THEN** the total baggage weight sums the top-level bags only, so nested entries are not counted twice
+
+#### Scenario: Incomplete nested weight
+- **WHEN** any entry inside a bag or its nested bags has no weight
+- **THEN** the bag's weight is marked incomplete
