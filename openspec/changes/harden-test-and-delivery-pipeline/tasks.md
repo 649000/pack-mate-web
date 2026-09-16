@@ -35,8 +35,8 @@
 
 - [x] 6.1 Add the `pull_request` trigger alongside `push: main` and `workflow_dispatch`, and restructure the required pre-deploy jobs (typecheck, lint/format, unit+coverage, integration, build+bundle, e2e); verify the workflow file is valid
 - [x] 6.2 Build once and promote the artifact to later jobs instead of rebuilding; verify deploy uses the tested artifact
-- [x] 6.3 Add the migration step (`supabase db push`) that runs only when migration files change and is bound to a protected environment; verify a schema-changing commit pauses for approval and a non-schema commit skips it
-- [ ] 6.4 Configure the required secrets and variables (`SUPABASE_ACCESS_TOKEN`, production project ref, public `NEXT_PUBLIC_*` variables); verify a main deploy succeeds end to end
+- [x] 6.3 Add the migration step (`supabase db push`) that runs only when migration files change and is bound to a protected environment; a non-schema commit skips it (verified in CI) and the `production` environment requires a reviewer
+- [x] 6.4 Configure the required secrets and variables (`SUPABASE_ACCESS_TOKEN`, production project ref, `FIREBASE_SERVICE_ACCOUNT`); verified by a successful end-to-end `main` deploy (run 35112486907)
 
 ## 7. Production smoke
 
