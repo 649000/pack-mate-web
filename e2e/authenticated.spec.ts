@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-// Authenticated flows need the auth role-claim function deployed, so they only
-// run when explicitly enabled (e.g. after a deploy).
+// Authenticated flows authenticate through Firebase and the local Supabase stack
+// cannot verify Firebase tokens, so these only run against the deployed backend
+// when explicitly enabled (e.g. after a deploy). See
+// openspec/changes/harden-test-and-delivery-pipeline/design.md.
 const enabled = process.env.E2E_AUTH === "1";
 
 async function signUp(page: Page): Promise<void> {

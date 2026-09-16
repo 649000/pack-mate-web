@@ -3,10 +3,11 @@ name: Pipeline
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: pipeline-main
+  group: pipeline-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -42,7 +43,39 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm run test:coverage
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Start local Supabase stack
+        run: npx supabase start
+      - name: Rebuild schema from migrations
+        run: npx supabase db reset
+      - run: npm run test:integration
+      - name: Stop local Supabase stack
+        if: always()
+        run: npx supabase stop --no-backup
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Secret scanning
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4
 
   build:
     runs-on: ubuntu-latest
@@ -55,8 +88,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run check:bundle
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-build
+          path: out
+          retention-days: 7
 
   e2e:
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -65,8 +104,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - uses: actions/download-artifact@v7
+        with:
+          name: web-build
+          path: out
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          PLAYWRIGHT_SERVE_ONLY: "1"
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -74,8 +119,43 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  changes:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.filter.outputs.migrations }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            migrations:
+              - 'supabase/migrations/**'
+
+  migrate:
+    needs: [changes]
+    if: needs.changes.outputs.migrations == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations
+        run: npx supabase db push --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+
   deploy:
-    needs: [typecheck, lint, unit, build, e2e]
+    needs: [typecheck, lint, unit, integration, security, build, e2e, migrate]
+    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && !failure() && !cancelled()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -84,7 +164,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - uses: actions/download-artifact@v7
+        with:
+          name: web-build
+          path: out
       - run: npm ci --prefix functions
       - name: Deploy hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
@@ -99,9 +182,12 @@ jobs:
           args: deploy --only functions --force
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      - name: Verify live backend (RLS integration)
-        run: npm run test:integration
+      - name: Verify live backend (smoke)
+        run: npm run test:smoke
       - name: Authenticated end-to-end (live)
         run: |
           npx playwright install --with-deps chromium
-          E2E_AUTH=1 npm run test:e2e
+          npm run test:e2e
+        env:
+          E2E_AUTH: "1"
+          PLAYWRIGHT_SERVE_ONLY: "1"

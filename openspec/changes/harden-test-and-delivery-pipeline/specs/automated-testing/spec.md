@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: End-to-end tests cover the UI
-The project SHALL have browser tests covering the public pages, authentication gating, responsive layout, error states, and the authenticated critical path (sign up, create a trip, pack an item, delete a trip). Tests SHALL run against the production static build, not the development server.
+The project SHALL have browser tests covering the public pages, authentication gating, responsive layout, error states, and the authenticated critical path (sign up, create a trip, pack an item, delete a trip). The public and gating tests SHALL run against the production static build, not the development server. The authenticated critical path SHALL run against the deployed backend, because the identity bridge cannot be exercised locally.
 
 #### Scenario: Public and gated routes
 - **WHEN** end-to-end tests run
@@ -15,16 +15,16 @@ The project SHALL have browser tests covering the public pages, authentication g
 - **WHEN** an unknown route is requested
 - **THEN** a not-found response is returned
 
-#### Scenario: Authenticated critical path
-- **WHEN** the authenticated end-to-end flow runs
-- **THEN** it signs up a user against the non-production identity provider, creates and packs a trip, and deletes it, using the non-production data backend
-
 #### Scenario: Production build
 - **WHEN** end-to-end tests run
 - **THEN** they exercise the built static output served over HTTP, not the development server
 
+#### Scenario: Authenticated critical path
+- **WHEN** the authenticated end-to-end flow runs against the deployed backend
+- **THEN** it signs up a user, creates and packs a trip, and deletes it
+
 ### Requirement: Integration tests verify data access and RLS
-The project SHALL have integration tests that run against an ephemeral local Supabase stack rebuilt from the project's migrations, authenticated with identity tokens from a dedicated non-production identity provider. They SHALL prove that one user cannot read or write another user's rows, that forged ownership is rejected, and that copy-on-add isolates library edits from existing trips.
+The project SHALL have integration tests that run against an ephemeral local Supabase stack rebuilt from the project's migrations, authenticated with locally-minted identity tokens. They SHALL prove that one user cannot read or write another user's rows, that forged ownership is rejected, and that copy-on-add isolates library edits from existing trips.
 
 #### Scenario: Cross-user access is denied
 - **WHEN** a second authenticated user reads or updates the first user's rows
@@ -42,9 +42,9 @@ The project SHALL have integration tests that run against an ephemeral local Sup
 - **WHEN** the local stack is rebuilt from migrations
 - **THEN** every table and row-level security policy required by the tests exists
 
-#### Scenario: Identity token bridge
-- **WHEN** an integration test authenticates with a non-production identity token
-- **THEN** the data backend accepts the token and the request runs as an authenticated user
+#### Scenario: Unauthenticated access is denied
+- **WHEN** a request carries no identity token
+- **THEN** no rows are returned
 
 ### Requirement: Tests gate deployment
 Tests SHALL run in CI on every change to the main branch, and on pull requests when the project adopts them, and MUST pass before deployment.
@@ -60,15 +60,26 @@ Tests SHALL run in CI on every change to the main branch, and on pull requests w
 ## ADDED Requirements
 
 ### Requirement: Test environments are isolated from production
-Automated tests MUST NOT read from or write to production resources. Only a single post-deploy smoke check MAY exercise the production backend, and it MUST clean up any data it creates.
+Unit and integration tests MUST NOT read from or write to production resources. Checks that exercise the deployed backend MUST use disposable identities and MUST remove the application data they create; the post-deploy smoke MUST also delete the identity it creates.
 
-#### Scenario: No production access during tests
-- **WHEN** unit, integration or end-to-end tests run
-- **THEN** they use only local or dedicated non-production resources
+#### Scenario: Hermetic tests
+- **WHEN** unit or integration tests run
+- **THEN** they use only local resources
+
+#### Scenario: Live checks use disposable identities
+- **WHEN** the authenticated end-to-end flow runs against the deployed backend
+- **THEN** it uses a unique address and removes the application data it creates
 
 #### Scenario: Post-deploy smoke cleans up
-- **WHEN** the post-deploy smoke check runs against production
-- **THEN** it removes any user or data it created
+- **WHEN** the post-deploy smoke runs against production
+- **THEN** it deletes the user and data it created
+
+### Requirement: The production identity bridge is verified after deploy
+The project SHALL verify, against the deployed backend, that a freshly created identity is accepted by the data backend and that its requests run as an authenticated user.
+
+#### Scenario: Token bridge works in production
+- **WHEN** the post-deploy smoke signs up a user and performs a row-level-security-scoped read
+- **THEN** the read succeeds as that user and the created data is removed afterwards
 
 ### Requirement: Coverage threshold is enforced
 The project SHALL measure unit-test coverage and SHALL fail CI when coverage falls below the configured threshold.

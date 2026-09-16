@@ -7,13 +7,15 @@ Constraints that shape the approach:
 - The project is pre-launch and trunk-based; `main` is the only gate before production.
 - Cost must stay minimal; no always-on resources.
 - Supabase RLS requires the identity token to carry `role: authenticated`; that claim comes from the deployed blocking function, not from the identity provider's defaults.
+- **Verified during implementation:** the local Supabase stack does not verify third-party Firebase tokens. Local PostgREST is configured only with the local JWT keys, so a real Firebase ID token is rejected with `JWSError JWSInvalidSignature`. The Firebase Auth emulator cannot be used either, because local Supabase verifies against Google's real JWKS. The identity bridge is therefore only observable against a hosted Supabase project.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Verify RLS, the identity-token bridge and the authenticated UI flow before deploying, not after.
-- Keep every automated test off production, except one minimal post-deploy smoke.
+- Verify RLS, policies and the schema hermetically before deploying.
+- Keep unit and integration tests entirely off production.
+- Verify the deployed identity bridge and the authenticated UI flow after deploying, using disposable identities.
 - Apply schema changes through the pipeline rather than by hand.
 - Be conformant with the existing `delivery` and `automated-testing` specs.
 - Adopt a pull-request trigger without rework when the workflow changes.
@@ -29,28 +31,29 @@ Constraints that shape the approach:
 
 ### Public configuration is environment-driven
 
-- **Why:** builds must target a non-production backend for tests, and the spec requires test/production isolation. Validating required public values at load makes a misconfigured build fail fast instead of silently pointing at the wrong backend.
-- **Alternative — keep the single committed production config:** rejected; it couples tests to production values and cannot express multiple environments.
-- **Consequence:** `.env.example` documents the variables, `.env.test` holds non-secret test values, and CI supplies values per environment. Public values remain non-secret; only genuine secrets live in encrypted CI secrets.
+- **Why:** builds should not hard-code a single backend; validating required public values at load makes a misconfigured build fail fast. It also lets the unauthenticated end-to-end run against the local stack with no production values.
+- **Alternative — keep the single committed production config:** rejected; it couples every build to production values and cannot express multiple environments.
+- **Consequence:** `.env.example` documents the variables, `.env.test` holds non-secret local values, and CI supplies values per environment. Public values remain non-secret; only genuine secrets live in encrypted CI secrets.
 
-### Integration tests use an ephemeral local Supabase stack plus a dedicated non-production identity provider
+### Integration tests use an ephemeral local Supabase stack with locally-minted identity tokens
 
-- **Why:** a local Supabase stack is rebuilt from the committed migrations, so it verifies the schema and policies that actually ship, with no production writes, and can run before deploy.
-- **Alternative — Firebase Auth emulator:** rejected. Local Supabase's third-party Firebase integration verifies tokens against Google's real JWKS, so emulator-signed tokens are rejected. The bridge cannot be emulated.
-- **Alternative — staging Supabase project:** rejected as more cost and operational surface for no additional fidelity; local Postgres with RLS is the same engine.
-- **Alternative — Supabase-native auth only:** rejected; it would test RLS but not the identity-token bridge, which is the security-critical seam.
-- **Consequence:** the identity provider for tests must be a real, dedicated project whose tokens local Supabase is configured to trust.
+- **Why:** a local Supabase stack is rebuilt from the committed migrations, so it verifies the schema and policies that actually ship, with real Postgres and RLS and no production writes, and can run before deploy. Tokens are minted locally with the stack's JWT secret (`role: authenticated`, `sub: <uid>`), which the local PostgREST accepts and RLS scopes on.
+- **Verified:** a minted token inserts and reads its own rows with `user_id` defaulting to the `sub` claim.
+- **Alternative — real Firebase tokens against the local stack:** rejected; verified to fail with `JWSInvalidSignature` because the local stack does not verify third-party Firebase tokens.
+- **Alternative — Firebase Auth emulator:** rejected; local Supabase verifies against Google's real JWKS, so emulator tokens cannot be accepted.
+- **Alternative — staging Supabase project:** rejected as more cost and operational surface for no additional fidelity.
+- **Consequence:** the identity bridge is not covered by integration tests; it is covered by the post-deploy smoke (below).
 
-### The auth blocking functions are deployed to the test identity project
+### The identity bridge is verified in production, not locally
 
-- **Why:** the `authenticated` role claim is produced by the blocking functions. Without them deployed to the test project, its tokens lack the claim and every RLS test would run as `anon` and fail.
-- **Consequence:** deploying `functions/` to the test project is part of setup and must be kept current.
+- **Why:** the bridge is the combination of the deployed blocking function (which stamps `role: authenticated`) and Supabase's hosted third-party-auth configuration. Neither is reproducible locally, so the only faithful check is a real sign-up against the deployed backend.
+- **Consequence:** a single minimal post-deploy smoke signs up, performs one RLS-scoped read and deletes the user. It proves the blocking function and the hosted third-party-auth configuration together.
 
-### Verification runs before deploy; the pull-request trigger is wired but inert
+### RLS and unauthenticated UI run before deploy; the authenticated UI runs after
 
-- **Why:** with trunk-based development, the deploy workflow is the only gate, so integration and end-to-end tests must complete before the deploy step. Adding the `pull_request` trigger now (when no pull requests exist) means no pipeline rework at launch.
-- **Alternative — keep verification post-deploy:** rejected; it detects breakage only after it is live.
-- **Consequence:** the pipeline is structured so the same required checks serve both `main` pushes and, later, pull requests.
+- **Why:** with trunk-based development the deploy workflow is the only gate, so anything that can run hermetically must run before the deploy step. The authenticated UI flow cannot run hermetically (the app authenticates via Firebase, which the local stack rejects), so it stays post-deploy, gated behind `E2E_AUTH=1`.
+- **Alternative — keep all verification post-deploy:** rejected; RLS and the schema can be verified earlier and should be.
+- **Consequence:** the pipeline runs integration and unauthenticated end-to-end pre-deploy on `main` (and on pull requests once adopted), then deploy, then the smoke and the authenticated flow.
 
 ### Migrations are applied by CI behind a protected environment
 
@@ -60,7 +63,7 @@ Constraints that shape the approach:
 
 ### A single minimal smoke replaces the broad live suite
 
-- **Why:** the broad live suite existed because nothing else could reach a live backend; once tests run locally against the real bridge, the only thing that needs production is confirming the deployed configuration works. One sign-up and one RLS-scoped read, cleaned up afterward, proves the deployed blocking function and third-party-auth configuration without polluting production.
+- **Why:** the broad live suite existed because nothing else could reach a live backend. The only thing that genuinely needs production is the identity bridge, so one sign-up, one scoped read and a cleanup suffice. The RLS behaviour it used to prove is now covered hermetically.
 
 ### End-to-end tests run against the production static build
 
@@ -72,33 +75,32 @@ Constraints that shape the approach:
 
 ### Superseded decisions
 
-This change reverses four decisions recorded in the archived `2026-09-14-quality-and-delivery` change and now encoded in the main specs:
+This change reverses decisions recorded in the archived `2026-09-14-quality-and-delivery` change and now encoded in the main specs:
 
 | Superseded decision | Replacement | Reason |
 | --- | --- | --- |
-| Public client config is committed | Environment-driven public config | Needed to target non-production backends and to validate per environment |
-| Integration tests run after deploy, not in pull-request CI | Integration runs before deploy, on `main` and later on pull requests | Post-deploy detection is too late |
-| No multi-environment promotion | A dedicated non-production identity provider (no staging environment) | The bridge cannot be emulated, so a real non-production project is required |
-| Authenticated end-to-end deferred | Authenticated end-to-end runs in CI | A non-production identity provider now exists, removing the blocker |
+| Public client config is committed | Environment-driven public config | Validate per environment and avoid hard-coding a single backend |
+| Integration tests run after deploy, not in pull-request CI | Integration runs hermetically before deploy, on `main` and later on pull requests | Post-deploy detection is too late, and RLS is verifiable without production |
+| No multi-environment promotion | Local stack for RLS; no staging environment | The local stack gives full RLS fidelity at no cost; only the bridge needs production |
 
 ## Risks / Trade-offs
 
-- **Local Supabase may reject non-production identity tokens** → validate this first as a decision gate; if it fails, fall back to a staging Supabase project and revisit this design.
-- **The non-production identity provider is a new CI network dependency** → it is the same dependency production already uses; add retries to absorb transient failures.
-- **The production smoke still runs after deploy** → unavoidable without a staging deploy; keep it minimal and pair it with failure alerting.
+- **The identity bridge is not covered before deploy** → it is verified immediately after deploy by the smoke; keep the smoke minimal and pair it with failure alerting.
+- **The smoke and the authenticated flow exercise production** → they use disposable identities, remove the application data they create, and the smoke deletes its user.
+- **The authenticated end-to-end flow can accumulate Firebase users** → it uses unique addresses; the smoke cleans up, and cleaning up the authenticated flow's users is a tracked follow-up.
+- **Local PostgREST token minting is coupled to the local JWT secret** → the secret is the documented local default; tests read it from the stack, not from a hard-coded production value.
 - **Docker adds CI time and cost** → acceptable; local Postgres is the highest-fidelity, lowest-cost option. No always-on resources are introduced.
 - **Coverage threshold could fail immediately** → start at the measured baseline and ratchet rather than picking an arbitrary number.
-- **Two identity projects and their third-party-auth configuration can drift** → keep the test project's functions deployed from the same source in CI.
 - **Google popup sign-in remains untested** → accepted limitation; email/password covers the bridge.
 
 ## Migration Plan
 
 Incremental and trunk-based. Order:
 
-1. Spike: confirm the local stack accepts non-production identity tokens with the role claim.
+1. Spike: determine whether the local stack verifies third-party Firebase tokens, and pick the local identity approach. (Done: it does not; use locally-minted tokens.)
 2. Introduce environment-driven config without changing production behavior (defaults unchanged).
-3. Add the local-stack scripts and rewrite the integration suite; confirm it passes locally and in CI before deploy.
-4. Move the authenticated end-to-end flow into pre-deploy CI against the production build.
+3. Add the local-stack scripts and rewrite the integration suite with minted tokens; confirm it passes locally and in CI before deploy.
+4. Serve the production static build for end-to-end tests; keep the authenticated flow gated and post-deploy.
 5. Add coverage and scanning gates at the measured baseline.
 6. Restructure the pipeline: required checks, migration step behind the protected environment, deploy, smoke.
 
@@ -106,4 +108,4 @@ Rollback: redeploy the previous static build via the pipeline. Migrations are fo
 
 ## Open Questions
 
-None. The one unresolved technical question — whether the local stack accepts non-production identity tokens — is a decision gate in the migration plan with a defined fallback.
+None. The decision gate is resolved: the local stack does not verify third-party Firebase tokens, so integration uses minted tokens and the bridge is verified by the post-deploy smoke.

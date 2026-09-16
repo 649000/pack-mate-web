@@ -339,6 +339,10 @@ email_optional = false
 enabled = false
 
 # Use Firebase Auth as a third-party provider alongside Supabase Auth.
+# Left disabled: the local stack does not verify third-party Firebase tokens
+# (local PostgREST is configured with the local JWT keys only), so this has no
+# effect locally. Integration tests mint local tokens instead; the Firebase
+# bridge is verified against the deployed backend by the post-deploy smoke.
 [auth.third_party.firebase]
 enabled = false
 # project_id = "my-firebase-project"

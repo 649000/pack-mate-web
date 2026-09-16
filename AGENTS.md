@@ -87,10 +87,14 @@ Keep Firebase and Supabase usage as cheap as possible. Avoid code or configurati
 
 Deployment runs through GitHub Actions, not from a developer machine.
 
-* CI runs lint, type-check, tests and the build.
+* CI runs on pull requests and on `main`: type-check, lint and formatting, unit tests with coverage, integration tests, the build, the bundle check, secret scanning and dependency review, and end-to-end tests.
+* Integration tests run against an ephemeral local Supabase stack and must pass before deployment.
+* Database migrations are versioned and applied by CI behind the protected `production` environment, before the app deploy.
 * Deployment to Firebase Hosting and Functions is performed by GitHub Actions.
+* After deploying, CI runs a production smoke test that verifies the Firebase-to-Supabase identity bridge and cleans up after itself, then the authenticated end-to-end flow.
 * Do not run `firebase deploy` manually.
 * Keep credentials and secrets in GitHub Actions secrets, never in the repository.
+* Public client configuration is environment-driven (`NEXT_PUBLIC_*`, validated in `lib/public-config.ts`) and is not secret; only genuine secrets belong in CI secrets.
 
 ### Authentication
 
@@ -338,10 +342,13 @@ Do not consider a feature complete merely because the happy path works.
 Automate testing as much as possible. Every meaningful behaviour change should come with tests.
 
 * Unit-test domain logic and validation (Vitest).
-* Integration-test data access against a Supabase project, including RLS: a second user must never read or write another user's rows.
+* Integration-test data access against an ephemeral local Supabase stack, including RLS: a second user must never read or write another user's rows. Run `npm run supabase:start` first, then `npm run test:integration`.
+* The local stack does not verify third-party Firebase tokens, so integration tests mint local identity tokens. The Firebase-to-Supabase bridge is verified by the production smoke (`npm run test:smoke`), which is the only test that touches production and must clean up after itself.
+* End-to-end tests run against the production static build; the authenticated flow is gated behind `E2E_AUTH=1` and runs against the deployed backend after deploy.
 * Cover normal behaviour, validation failures, authentication failures, authorisation failures, empty states and important edge cases.
 * Do not write tests that merely reproduce implementation details.
-* Tests run in CI on every pull request and must pass before deployment.
+* Tests run in CI on every pull request and on `main`, and must pass before deployment.
+* Unit coverage is enforced at a ratcheting threshold (`npm run test:coverage`).
 
 ## Git
 
