@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { ListSearch, ListSearchEmpty } from "@/components/list-search";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +46,7 @@ import {
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
 import { createItem, deleteItem, getProfile, listItems, updateItem } from "@/lib/data";
-import { filterEntriesByCategory, type CategoryFilter } from "@/lib/packing";
+import { filterByName, filterEntriesByCategory, type CategoryFilter } from "@/lib/packing";
 import type { DisplayWeightUnit, ItemCategory, ReusableItem } from "@/lib/types";
 import {
   ITEM_CATEGORY_GROUPS,
@@ -70,6 +72,8 @@ export function ItemsView() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ReusableItem | null>(null);
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   function refresh() {
     return Promise.all([listItems(), getProfile()])
@@ -158,7 +162,7 @@ export function ItemsView() {
     }
   }
 
-  const visibleItems = filterEntriesByCategory(items, categoryFilter);
+  const visibleItems = filterEntriesByCategory(filterByName(items, query), categoryFilter);
 
   return (
     <div className="flex flex-col gap-5">
@@ -180,7 +184,14 @@ export function ItemsView() {
           </CardHeading>
         </CardHeader>
         {!loading && items.length > 0 ? (
-          <div className="px-4 pb-3">
+          <div className="flex flex-col gap-3 px-4 pb-3">
+            <ListSearch
+              id="item-search"
+              label="Search items"
+              value={query}
+              onChange={setQuery}
+              placeholder="e.g. passport"
+            />
             <CategoryFilterChips
               entries={items}
               value={categoryFilter}
@@ -197,9 +208,13 @@ export function ItemsView() {
               No items yet. Add your first one.
             </div>
           ) : visibleItems.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No items in this category.
-            </div>
+            query.trim() ? (
+              <ListSearchEmpty noun="items" query={query} />
+            ) : (
+              <div className="p-10 text-center text-sm text-muted-foreground">
+                No items in this category.
+              </div>
+            )
           ) : (
             <Table>
               <TableHeader>
@@ -397,5 +412,9 @@ export function ItemsView() {
 }
 
 export default function ItemsPage() {
-  return <ItemsView />;
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <ItemsView />
+    </Suspense>
+  );
 }

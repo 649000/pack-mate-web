@@ -127,10 +127,14 @@ export function entryLocationPath<E extends EntryLike, B extends BagLike>(
   return names.length > 0 ? names.join(" > ") : UNASSIGNED_LABEL;
 }
 
-export function searchEntries<E extends { name: string }>(entries: E[], query: string): E[] {
+export function filterByName<T extends { name: string }>(entries: T[], query: string): T[] {
   const needle = query.trim().toLowerCase();
   if (needle.length === 0) return entries;
   return entries.filter((entry) => entry.name.toLowerCase().includes(needle));
+}
+
+export function searchEntries<E extends { name: string }>(entries: E[], query: string): E[] {
+  return filterByName(entries, query);
 }
 
 export type CategoryFilter = "all" | "uncategorised" | ItemCategory;

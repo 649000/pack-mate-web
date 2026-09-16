@@ -290,4 +290,37 @@ test.describe("authenticated critical path", () => {
 
     await context.close();
   });
+
+  test("searches the library from the dialog and filters a list", async ({ page }) => {
+    await signUp(page);
+
+    // A library item and bag to find.
+    await page.goto("/items");
+    await page.getByRole("button", { name: /add item/i }).click();
+    await page.getByLabel("Name").fill("Passport");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    await page.goto("/bags");
+    await page.getByRole("button", { name: /add bag/i }).click();
+    await page.getByLabel("Name").fill("Daypack");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    // The dialog searches real data and lands on the filtered list.
+    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByPlaceholder("Search Pack Mate...").fill("pass");
+    await expect(page.getByText("Passport")).toBeVisible();
+    await page.getByText("Passport").click();
+    await expect(page).toHaveURL(/\/items\?q=pass/);
+    await expect(page.getByLabel("Search items")).toHaveValue("pass");
+    await expect(page.getByText("Passport")).toBeVisible();
+
+    // A list page filters by name and can be cleared.
+    await page.goto("/bags?q=day");
+    await expect(page.getByLabel("Search bags")).toHaveValue("day");
+    await expect(page.getByText("Daypack")).toBeVisible();
+    await page.getByRole("button", { name: /clear/i }).click();
+    await expect(page.getByLabel("Search bags")).toHaveValue("");
+  });
 });

@@ -77,6 +77,7 @@ export const ITEM_CATEGORY_GROUPS = [
 
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_DISPLAY_NAME_LENGTH = 80;
+export const MAX_NAME_LENGTH = 200;
 export const MAX_DESCRIPTION_LENGTH = 2000;
 export const MAX_WEIGHT_GRAMS = 100000;
 
@@ -86,6 +87,9 @@ export function validateName(value: string, field = "Name"): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     throw new ValidationError(`${field} is required`);
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    throw new ValidationError(`${field} cannot exceed ${MAX_NAME_LENGTH} characters`);
   }
   return trimmed;
 }

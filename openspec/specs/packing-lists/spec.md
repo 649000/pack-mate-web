@@ -27,6 +27,21 @@ The system SHALL allow a user to add a reusable item to a trip, optionally insid
 - **WHEN** a user adds an item that is not in their library to a trip
 - **THEN** the trip gains an entry for that item without affecting the library
 
+### Requirement: Validate packing list name length
+The system SHALL reject a trip bag or trip entry name longer than 200 characters, after trimming surrounding whitespace. The limit SHALL be enforced wherever a trip bag or entry is created or edited, including a direct database write.
+
+#### Scenario: Reject an over-long trip entry name
+- **WHEN** a user adds or renames a trip entry with a name longer than 200 characters
+- **THEN** the system rejects the request and does not save the entry
+
+#### Scenario: Accept a name at the maximum length
+- **WHEN** a user saves a trip entry with a name of exactly 200 characters
+- **THEN** the entry is saved with that name
+
+#### Scenario: Reject an over-long name written directly to the database
+- **WHEN** a name longer than 200 characters is written to a trip bag or trip entry without going through the application
+- **THEN** the database rejects the write
+
 ### Requirement: Assign an item to a bag or With Me
 The system SHALL place each trip entry in exactly one location: inside a trip bag, marked With Me, or loose (unassigned). Bag membership and With Me MUST be mutually exclusive.
 

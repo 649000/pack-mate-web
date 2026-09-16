@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Trip } from "@/lib/types";
 
+const params = vi.hoisted(() => ({ current: "" }));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(params.current),
+}));
+
 vi.mock("@/lib/data", () => ({
   listTrips: vi.fn(),
   createTrip: vi.fn(),
@@ -34,6 +40,7 @@ const trip: Trip = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  params.current = "";
 });
 
 describe("TripsView", () => {
@@ -82,5 +89,39 @@ describe("TripsView", () => {
     await user.click(confirm[confirm.length - 1]);
 
     await waitFor(() => expect(data.deleteTrip).toHaveBeenCalledWith("t1"));
+  });
+
+  it("filters trips from the query parameter on first render", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip, { ...trip, id: "t2", name: "Iceland" }]);
+    params.current = "q=ice";
+    render(<TripsView />);
+
+    expect(await screen.findByText("Iceland")).toBeInTheDocument();
+    expect(screen.queryByText("Japan")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search trips")).toHaveValue("ice");
+  });
+
+  it("filters trips as the user types and restores them when cleared", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip, { ...trip, id: "t2", name: "Iceland" }]);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.type(screen.getByLabelText("Search trips"), "ice");
+    expect(screen.getByText("Iceland")).toBeInTheDocument();
+    expect(screen.queryByText("Japan")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /clear/i }));
+    expect(screen.getByText("Japan")).toBeInTheDocument();
+  });
+
+  it("shows an empty state naming the query when nothing matches", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.type(screen.getByLabelText("Search trips"), "zzz");
+    expect(screen.getByText(/no trips match .*zzz/i)).toBeInTheDocument();
   });
 });

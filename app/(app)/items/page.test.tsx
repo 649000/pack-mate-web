@@ -4,6 +4,12 @@ import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReusableItem } from "@/lib/types";
 
+const params = vi.hoisted(() => ({ current: "" }));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(params.current),
+}));
+
 vi.mock("@/lib/data", () => ({
   listItems: vi.fn(),
   getProfile: vi.fn(),
@@ -34,6 +40,7 @@ const item: ReusableItem = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  params.current = "";
   vi.mocked(data.getProfile).mockResolvedValue(null);
 });
 
@@ -295,5 +302,62 @@ describe("ItemsView", () => {
     await user.click(confirm[confirm.length - 1]);
 
     expect(await screen.findByText(/no items in this category/i)).toBeInTheDocument();
+  });
+
+  it("filters items from the query parameter on first render", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([
+      { ...item, id: "i1", name: "Tee" },
+      { ...item, id: "i2", name: "Charger" },
+    ]);
+    params.current = "q=char";
+    render(<ItemsView />);
+
+    expect(await screen.findByText("Charger")).toBeInTheDocument();
+    expect(screen.queryByText("Tee")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search items")).toHaveValue("char");
+  });
+
+  it("composes the name query with the category filter", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([
+      { ...item, id: "i1", name: "Tee", category: "clothing" },
+      { ...item, id: "i2", name: "Tee light", category: "electronics" },
+      { ...item, id: "i3", name: "Charger", category: "clothing" },
+    ]);
+    const user = userEvent.setup();
+    render(<ItemsView />);
+    await screen.findByText("Tee");
+
+    await user.type(screen.getByLabelText("Search items"), "tee");
+    expect(screen.getByText("Tee light")).toBeInTheDocument();
+    expect(screen.queryByText("Charger")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    expect(screen.getByText("Tee")).toBeInTheDocument();
+    expect(screen.queryByText("Tee light")).not.toBeInTheDocument();
+  });
+
+  it("keeps the category options unchanged when searching", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([
+      { ...item, id: "i1", name: "Tee", category: "clothing" },
+      { ...item, id: "i2", name: "Charger", category: "electronics" },
+    ]);
+    const user = userEvent.setup();
+    render(<ItemsView />);
+    await screen.findByText("Tee");
+
+    await user.type(screen.getByLabelText("Search items"), "charger");
+
+    expect(screen.getByRole("button", { name: "Clothing" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Electronics" })).toBeInTheDocument();
+  });
+
+  it("shows an empty state naming the query when nothing matches", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([item]);
+    const user = userEvent.setup();
+    render(<ItemsView />);
+    await screen.findByText("Passport");
+
+    await user.type(screen.getByLabelText("Search items"), "zzz");
+    expect(screen.getByText(/no items match .*zzz/i)).toBeInTheDocument();
   });
 });

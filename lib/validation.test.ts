@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   ITEM_CATEGORIES,
   MAX_DESCRIPTION_LENGTH,
+  MAX_NAME_LENGTH,
   MAX_WEIGHT_GRAMS,
   ValidationError,
   parseQty,
@@ -35,6 +36,21 @@ describe("validateName", () => {
 
   it("uses the provided field label in the error", () => {
     expect(() => validateName("", "Trip name")).toThrow("Trip name is required");
+  });
+
+  it("accepts a name at the maximum length", () => {
+    const name = "a".repeat(MAX_NAME_LENGTH);
+    expect(validateName(name)).toHaveLength(MAX_NAME_LENGTH);
+  });
+
+  it("rejects a name beyond the maximum length", () => {
+    expect(() => validateName("a".repeat(MAX_NAME_LENGTH + 1))).toThrow(ValidationError);
+    expect(() => validateName("a".repeat(MAX_NAME_LENGTH + 1))).toThrow(/cannot exceed 200/i);
+  });
+
+  it("measures the length after trimming", () => {
+    expect(validateName(`  ${"a".repeat(MAX_NAME_LENGTH)}  `)).toHaveLength(MAX_NAME_LENGTH);
+    expect(() => validateName(`  ${"a".repeat(MAX_NAME_LENGTH + 1)}  `)).toThrow(ValidationError);
   });
 });
 

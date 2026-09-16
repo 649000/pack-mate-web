@@ -3,6 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReusableBag } from "@/lib/types";
 
+const params = vi.hoisted(() => ({ current: "" }));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(params.current),
+}));
+
 vi.mock("@/lib/data", () => ({
   listBags: vi.fn(),
   listItems: vi.fn(),
@@ -32,6 +38,7 @@ const bag: ReusableBag = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  params.current = "";
   vi.mocked(data.listItems).mockResolvedValue([]);
   vi.mocked(data.getProfile).mockResolvedValue(null);
   vi.mocked(data.listBagContents).mockResolvedValue([]);
@@ -133,5 +140,45 @@ describe("BagsView", () => {
     await user.click(confirm[confirm.length - 1]);
 
     await waitFor(() => expect(data.deleteBag).toHaveBeenCalledWith("b1"));
+  });
+
+  it("filters bags from the query parameter on first render", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([
+      { ...bag, id: "b1", name: "Daypack" },
+      { ...bag, id: "b2", name: "Suitcase" },
+    ]);
+    params.current = "q=day";
+    render(<BagsView />);
+
+    expect(await screen.findByText("Daypack")).toBeInTheDocument();
+    expect(screen.queryByText("Suitcase")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Search bags")).toHaveValue("day");
+  });
+
+  it("filters bags as the user types and restores them when cleared", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([
+      { ...bag, id: "b1", name: "Daypack" },
+      { ...bag, id: "b2", name: "Suitcase" },
+    ]);
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText("Daypack");
+
+    await user.type(screen.getByLabelText("Search bags"), "suit");
+    expect(screen.getByText("Suitcase")).toBeInTheDocument();
+    expect(screen.queryByText("Daypack")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /clear/i }));
+    expect(screen.getByText("Daypack")).toBeInTheDocument();
+  });
+
+  it("shows an empty state naming the query when nothing matches", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText("Electronics");
+
+    await user.type(screen.getByLabelText("Search bags"), "zzz");
+    expect(screen.getByText(/no bags match .*zzz/i)).toBeInTheDocument();
   });
 });

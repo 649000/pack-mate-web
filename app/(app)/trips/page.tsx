@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { ListSearch, ListSearchEmpty } from "@/components/list-search";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { createTrip, deleteTrip, listTrips, updateTrip } from "@/lib/data";
+import { filterByName } from "@/lib/packing";
 import type { Trip } from "@/lib/types";
 import { validateName } from "@/lib/validation";
 
@@ -61,6 +64,8 @@ export function TripsView() {
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Trip | null>(null);
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   function refresh() {
     return listTrips()
@@ -132,6 +137,8 @@ export function TripsView() {
     }
   }
 
+  const visibleTrips = filterByName(trips, query);
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -151,6 +158,17 @@ export function TripsView() {
             </CardDescription>
           </CardHeading>
         </CardHeader>
+        {!loading && trips.length > 0 ? (
+          <div className="px-4 pb-3">
+            <ListSearch
+              id="trip-search"
+              label="Search trips"
+              value={query}
+              onChange={setQuery}
+              placeholder="e.g. Japan"
+            />
+          </div>
+        ) : null}
         <CardTable>
           {loading ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>
@@ -158,6 +176,8 @@ export function TripsView() {
             <div className="p-10 text-center text-sm text-muted-foreground">
               No trips yet. Create your first one.
             </div>
+          ) : visibleTrips.length === 0 ? (
+            <ListSearchEmpty noun="trips" query={query} />
           ) : (
             <Table>
               <TableHeader>
@@ -168,7 +188,7 @@ export function TripsView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {trips.map((trip) => (
+                {visibleTrips.map((trip) => (
                   <TableRow key={trip.id}>
                     <TableCell>
                       <Link href={`/trip?id=${trip.id}`} className="font-medium hover:text-primary">
@@ -268,5 +288,9 @@ export function TripsView() {
 }
 
 export default function TripsPage() {
-  return <TripsView />;
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <TripsView />
+    </Suspense>
+  );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withDb } from "./helpers";
+import { mintToken, rest, withDb } from "./helpers";
 
 // Tables the integration suite depends on. Migrations may add more; these must
 // always exist and be protected by row-level security.
@@ -53,4 +53,140 @@ describe("schema and RLS policies (integration)", () => {
 
     expect(withoutPolicy).toEqual([]);
   });
+});
+
+// The database mirrors the application limits in lib/validation.ts
+// (MAX_NAME_LENGTH = 200, MAX_WEIGHT_GRAMS = 100000), so a write that bypasses
+// the app cannot exceed them. These go through PostgREST to exercise the real
+// boundary, including RLS and column defaults.
+describe("name length and weight ceiling constraints (integration)", () => {
+  const stamp = Date.now();
+  const token = mintToken(`it-limits-${stamp}`);
+  const maxName = "a".repeat(200);
+  const overName = "a".repeat(201);
+
+  async function createTrip(name = "Limits trip"): Promise<string> {
+    const trip = await rest("trips", token, {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    expect(trip.status).toBe(201);
+    return (trip.body as { id: string }[])[0].id;
+  }
+
+  it("rejects a name over the maximum on every named table", async () => {
+    const item = await rest("reusable_items", token, {
+      method: "POST",
+      body: JSON.stringify({ name: overName, default_qty: 1 }),
+    });
+    expect(item.status).toBeGreaterThanOrEqual(400);
+
+    const bag = await rest("reusable_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ name: overName }),
+    });
+    expect(bag.status).toBeGreaterThanOrEqual(400);
+
+    const trip = await rest("trips", token, {
+      method: "POST",
+      body: JSON.stringify({ name: overName }),
+    });
+    expect(trip.status).toBeGreaterThanOrEqual(400);
+
+    const tripId = await createTrip();
+
+    const tripBag = await rest("trip_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: overName }),
+    });
+    expect(tripBag.status).toBeGreaterThanOrEqual(400);
+
+    const entry = await rest("trip_entries", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: overName, qty: 1 }),
+    });
+    expect(entry.status).toBeGreaterThanOrEqual(400);
+  }, 30_000);
+
+  it("accepts a name at the maximum length on every named table", async () => {
+    const item = await rest("reusable_items", token, {
+      method: "POST",
+      body: JSON.stringify({ name: maxName, default_qty: 1 }),
+    });
+    expect(item.status).toBe(201);
+
+    const bag = await rest("reusable_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ name: maxName }),
+    });
+    expect(bag.status).toBe(201);
+
+    const tripId = await createTrip(maxName);
+
+    const tripBag = await rest("trip_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: maxName }),
+    });
+    expect(tripBag.status).toBe(201);
+
+    const entry = await rest("trip_entries", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: maxName, qty: 1 }),
+    });
+    expect(entry.status).toBe(201);
+  }, 30_000);
+
+  it("rejects a library weight above the ceiling and accepts the boundary", async () => {
+    const overItem = await rest("reusable_items", token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Heavy item", default_qty: 1, weight_grams: 100001 }),
+    });
+    expect(overItem.status).toBeGreaterThanOrEqual(400);
+
+    const maxItem = await rest("reusable_items", token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Max item", default_qty: 1, weight_grams: 100000 }),
+    });
+    expect(maxItem.status).toBe(201);
+
+    const overBag = await rest("reusable_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Heavy bag", weight_limit_grams: 100001 }),
+    });
+    expect(overBag.status).toBeGreaterThanOrEqual(400);
+
+    const maxBag = await rest("reusable_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ name: "Max bag", weight_limit_grams: 100000 }),
+    });
+    expect(maxBag.status).toBe(201);
+  }, 30_000);
+
+  it("rejects a trip entry weight or trip bag limit above the ceiling", async () => {
+    const tripId = await createTrip("Weight trip");
+
+    const overEntry = await rest("trip_entries", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Heavy", qty: 1, weight_grams: 100001 }),
+    });
+    expect(overEntry.status).toBeGreaterThanOrEqual(400);
+
+    const maxEntry = await rest("trip_entries", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Max", qty: 1, weight_grams: 100000 }),
+    });
+    expect(maxEntry.status).toBe(201);
+
+    const overBag = await rest("trip_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Heavy bag", weight_limit_grams: 100001 }),
+    });
+    expect(overBag.status).toBeGreaterThanOrEqual(400);
+
+    const maxBag = await rest("trip_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Max bag", weight_limit_grams: 100000 }),
+    });
+    expect(maxBag.status).toBe(201);
+  }, 30_000);
 });

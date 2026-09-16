@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { ListSearch, ListSearchEmpty } from "@/components/list-search";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,6 +55,7 @@ import {
   updateBag,
 } from "@/lib/data";
 import type { DisplayWeightUnit, ReusableBag, ReusableBagItem, ReusableItem } from "@/lib/types";
+import { filterByName } from "@/lib/packing";
 import { parseQty, validateName } from "@/lib/validation";
 import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
 
@@ -73,6 +76,8 @@ export function BagsView() {
   const [contents, setContents] = useState<ReusableBagItem[]>([]);
   const [addItemId, setAddItemId] = useState("");
   const [addQty, setAddQty] = useState("1");
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   function refresh() {
     return Promise.all([listBags(), listItems(), getProfile()])
@@ -185,6 +190,8 @@ export function BagsView() {
     }
   }
 
+  const visibleBags = filterByName(bags, query);
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -204,6 +211,17 @@ export function BagsView() {
             </CardDescription>
           </CardHeading>
         </CardHeader>
+        {!loading && bags.length > 0 ? (
+          <div className="px-4 pb-3">
+            <ListSearch
+              id="bag-search"
+              label="Search bags"
+              value={query}
+              onChange={setQuery}
+              placeholder="e.g. daypack"
+            />
+          </div>
+        ) : null}
         <CardTable>
           {loading ? (
             <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>
@@ -211,6 +229,8 @@ export function BagsView() {
             <div className="p-10 text-center text-sm text-muted-foreground">
               No bags yet. Add your first one.
             </div>
+          ) : visibleBags.length === 0 ? (
+            <ListSearchEmpty noun="bags" query={query} />
           ) : (
             <Table>
               <TableHeader>
@@ -220,7 +240,7 @@ export function BagsView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bags.map((bag) => (
+                {visibleBags.map((bag) => (
                   <TableRow key={bag.id}>
                     <TableCell>
                       <span className="font-medium">{bag.name}</span>
@@ -379,5 +399,9 @@ export function BagsView() {
 }
 
 export default function BagsPage() {
-  return <BagsView />;
+  return (
+    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+      <BagsView />
+    </Suspense>
+  );
 }

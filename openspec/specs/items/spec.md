@@ -72,6 +72,21 @@ The system SHALL reject a link or image URL that is not an absolute http or http
 - **WHEN** a user saves an item with a description longer than the allowed maximum
 - **THEN** the system rejects the request and does not save the description
 
+### Requirement: Validate item name length
+The system SHALL reject a reusable item name longer than 200 characters, after trimming surrounding whitespace. The limit SHALL be enforced wherever an item is created or edited, including a direct database write.
+
+#### Scenario: Reject an over-long item name
+- **WHEN** a user saves an item with a name longer than 200 characters
+- **THEN** the system rejects the request and does not save the item
+
+#### Scenario: Accept a name at the maximum length
+- **WHEN** a user saves an item with a name of exactly 200 characters
+- **THEN** the item is saved with that name
+
+#### Scenario: Reject an over-long name written directly to the database
+- **WHEN** a name longer than 200 characters is written to an item without going through the application
+- **THEN** the database rejects the write
+
 ### Requirement: Record item weight
 The system SHALL allow an authenticated user to attach an optional weight to a reusable item, entered and displayed in the user's preferred unit and stored canonically in grams. The weight is per unit of the item.
 
@@ -96,7 +111,7 @@ The system SHALL allow an authenticated user to attach an optional weight to a r
 - **THEN** the trip's packing list entries are unchanged
 
 ### Requirement: Validate item weight
-The system SHALL reject a weight that is negative, not a number, or greater than the allowed maximum.
+The system SHALL reject a weight that is negative, not a number, or greater than 100000 grams.
 
 #### Scenario: Reject a negative weight
 - **WHEN** a user saves an item with a negative weight
@@ -107,8 +122,12 @@ The system SHALL reject a weight that is negative, not a number, or greater than
 - **THEN** the system rejects the request and does not save the weight
 
 #### Scenario: Reject an excessive weight
-- **WHEN** a user saves an item with a weight greater than the allowed maximum
+- **WHEN** a user saves an item with a weight greater than 100000 grams
 - **THEN** the system rejects the request and does not save the weight
+
+#### Scenario: Reject an excessive weight written directly to the database
+- **WHEN** a weight greater than 100000 grams is written to an item without going through the application
+- **THEN** the database rejects the write
 
 ### Requirement: Record item category
 

@@ -8,6 +8,7 @@ import {
   destinationBagId,
   destinationToLocation,
   entryLocationPath,
+  filterByName,
   filterEntriesByCategory,
   groupEntries,
   hasUncategorised,
@@ -213,6 +214,35 @@ describe("searchEntries", () => {
 
   it("returns nothing when there is no match", () => {
     expect(searchEntries(entries, "tent")).toEqual([]);
+  });
+});
+
+describe("filterByName", () => {
+  const entries = [{ name: "Passport" }, { name: "Passport holder" }, { name: "Charger" }];
+
+  it("matches case-insensitive substrings", () => {
+    expect(filterByName(entries, "PASS").map((e) => e.name)).toEqual([
+      "Passport",
+      "Passport holder",
+    ]);
+  });
+
+  it("ignores surrounding whitespace", () => {
+    expect(filterByName(entries, "  charger  ").map((e) => e.name)).toEqual(["Charger"]);
+  });
+
+  it("returns everything for an empty query", () => {
+    expect(filterByName(entries, "")).toEqual(entries);
+    expect(filterByName(entries, "   ")).toEqual(entries);
+  });
+
+  it("returns nothing when there is no match", () => {
+    expect(filterByName(entries, "tent")).toEqual([]);
+  });
+
+  it("works for any object with a name", () => {
+    const items = [{ name: "Tent", id: 1 }];
+    expect(filterByName(items, "ten")).toEqual(items);
   });
 });
 
