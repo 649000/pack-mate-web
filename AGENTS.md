@@ -95,6 +95,7 @@ Deployment runs through GitHub Actions, not from a developer machine.
 * Do not run `firebase deploy` manually.
 * Keep credentials and secrets in GitHub Actions secrets, never in the repository.
 * Public client configuration is environment-driven (`NEXT_PUBLIC_*`, validated in `lib/public-config.ts`) and is not secret; only genuine secrets belong in CI secrets.
+* When connecting a new hosting domain, add it to the Firebase Auth authorized domains (Identity Platform config); otherwise Google sign-in fails with `auth/unauthorized-domain`.
 
 ### Authentication
 
