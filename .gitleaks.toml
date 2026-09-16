@@ -1,0 +1,21 @@
+# gitleaks configuration.
+#
+# The project intentionally commits public client configuration. The Firebase web
+# API key and the Supabase publishable key are identifiers, not secrets: security
+# is enforced by Firebase Auth settings and Supabase row-level security. The local
+# development values used by tests are the deterministic Supabase CLI defaults and
+# cannot access production.
+#
+# This allowlist only suppresses false positives on those known-public values. It
+# must never be widened to cover Supabase secret keys (sb_secret_), service-role
+# keys, database URLs or passwords.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public client identifiers and local Supabase CLI defaults are not secrets"
+regexes = [
+  '''sb_publishable_[A-Za-z0-9_-]+''',
+  '''AIza[0-9A-Za-z_-]{35}''',
+  '''super-secret-jwt-token-with-at-least-32-characters-long''',
+]

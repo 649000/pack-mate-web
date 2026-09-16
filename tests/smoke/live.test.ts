@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { publicConfig } from "@/lib/public-config";
 
@@ -10,12 +11,15 @@ const { url, publishableKey } = publicConfig.supabase;
 const SCHEMA = "packmate";
 
 async function signUp(email: string): Promise<string> {
+  // A fresh, random password per run: no credential literal lives in the repo,
+  // and any account left behind cannot be signed into with a known password.
+  const password = `Test-pass-${crypto.randomUUID()}`;
   const res = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "Test-pass-123456", returnSecureToken: true }),
+      body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
   );
   const json = await res.json();

@@ -18,6 +18,7 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "coverage/**",
     "next-env.d.ts",
     // Reference templates are read-only inspiration, not part of the app.
     "reference/**",

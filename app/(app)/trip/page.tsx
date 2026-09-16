@@ -754,7 +754,7 @@ export function TripView() {
               className="h-8.5 rounded-md border border-input bg-background px-3 text-[0.8125rem]"
               value={addItemDestination}
               onChange={(event) => setAddItemDestination(event.target.value)}
-              aria-label="Destination"
+              aria-label="Destination for library item"
             >
               <option value="loose">Loose</option>
               <option value="with_me">With Me</option>
@@ -796,7 +796,7 @@ export function TripView() {
               className="h-8.5 rounded-md border border-input bg-background px-3 text-[0.8125rem]"
               value={adhocDestination}
               onChange={(event) => setAdhocDestination(event.target.value)}
-              aria-label="Destination"
+              aria-label="Destination for one-off item"
             >
               <option value="loose">Loose</option>
               <option value="with_me">With Me</option>

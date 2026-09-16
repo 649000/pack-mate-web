@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 // Authenticated flows authenticate through Firebase and the local Supabase stack
@@ -8,10 +9,12 @@ const enabled = process.env.E2E_AUTH === "1";
 
 async function signUp(page: Page): Promise<void> {
   const email = `packmate-e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+  // Random per run so no credential literal lives in the repo.
+  const password = `Test-pass-${randomUUID()}`;
   await page.goto("/sign-in");
   await page.getByRole("button", { name: /create one/i }).click();
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("Test-pass-123456");
+  await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: /create account/i }).click();
   await expect(page).toHaveURL(/\/trips$/);
 }
@@ -126,6 +129,9 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Description").fill("Navy cover");
     await page.getByLabel("Link").fill("https://example.com/passport");
     await page.getByRole("button", { name: /^save$/i }).click();
+    // Wait for the dialog to close so the save has committed before asserting;
+    // the description text also exists in the open dialog's textarea.
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("Navy cover")).toBeVisible();
 
     // Create a trip and add the item to it.
@@ -138,7 +144,9 @@ test.describe("authenticated critical path", () => {
 
     await page.getByLabel("Add an item from your library").selectOption({ label: "Passport" });
     await page.getByRole("button", { name: /^add item$/i }).click();
-    await expect(page.getByText("Passport")).toBeVisible();
+    // The name also appears as an <option> in the library select, so anchor on
+    // the entry row's unique field instead of the text.
+    await expect(page.getByLabel("Quantity for Passport")).toBeVisible();
 
     // Search for the item and confirm its location is shown.
     await page.getByLabel("Search items").fill("pass");
@@ -155,6 +163,7 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Name").fill("Main");
     await page.getByLabel(/weight limit/i).fill("1");
     await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText(/limit 1\.00 kg/i)).toBeVisible();
 
     // Create a 2 kg item.
@@ -163,6 +172,7 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Name").fill("Tent");
     await page.getByLabel(/weight \(kg\)/i).fill("2");
     await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("2.00 kg")).toBeVisible();
 
     // Create a trip, add the bag, and put the item inside it.
@@ -176,7 +186,7 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Add a bag from your library").selectOption({ label: "Main" });
     await page.getByRole("button", { name: /^add bag$/i }).click();
     await page.getByLabel("Add an item from your library").selectOption({ label: "Tent" });
-    await page.getByLabel("Destination").selectOption({ label: "Main" });
+    await page.getByLabel("Destination for library item").selectOption({ label: "Main" });
     await page.getByRole("button", { name: /^add item$/i }).click();
 
     // The trip shows the bag over its limit.
@@ -193,12 +203,14 @@ test.describe("authenticated critical path", () => {
       await page.getByRole("button", { name: /add bag/i }).click();
       await page.getByLabel("Name").fill(name);
       await page.getByRole("button", { name: /^save$/i }).click();
+      await expect(page.getByRole("dialog")).toBeHidden();
       await expect(page.getByText(name).first()).toBeVisible();
     }
     await page.goto("/items");
     await page.getByRole("button", { name: /add item/i }).click();
     await page.getByLabel("Name").fill("Toothbrush");
     await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("Toothbrush").first()).toBeVisible();
 
     // Trip with both bags, the item inside Toiletry.
@@ -214,7 +226,7 @@ test.describe("authenticated critical path", () => {
       await page.getByRole("button", { name: /^add bag$/i }).click();
     }
     await page.getByLabel("Add an item from your library").selectOption({ label: "Toothbrush" });
-    await page.getByLabel("Destination").selectOption({ label: "Toiletry" });
+    await page.getByLabel("Destination for library item").selectOption({ label: "Toiletry" });
     await page.getByRole("button", { name: /^add item$/i }).click();
 
     // Nest Toiletry inside Suitcase and confirm the path.
