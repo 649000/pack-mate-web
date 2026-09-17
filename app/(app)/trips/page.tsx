@@ -1,10 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ListSearch, ListSearchEmpty } from "@/components/list-search";
+import { Columns3, ListChecks, MapPin, Pencil, Plus, SearchX, Trash2 } from "lucide-react";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { EmptyState } from "@/components/empty-state";
+import { RecordAction } from "@/components/record-action";
+import { ListSearchToolbar } from "@/components/list-search";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,17 +23,13 @@ import {
   CardDescription,
   CardHeader,
   CardHeading,
-  CardTable,
   CardTitle,
+  CardToolbar,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataGrid } from "@/components/ui/data-grid";
+import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
+import { DataGridColumnVisibility } from "@/components/ui/data-grid-column-visibility";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +72,8 @@ export function TripsView() {
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Trip | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
@@ -92,13 +102,13 @@ export function TripsView() {
     setEditorOpen(true);
   }
 
-  function openEdit(trip: Trip) {
+  const openEdit = useCallback((trip: Trip) => {
     setEditing(trip);
     setName(trip.name);
     setStartDate(trip.start_date ?? "");
     setEndDate(trip.end_date ?? "");
     setEditorOpen(true);
-  }
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -139,6 +149,67 @@ export function TripsView() {
 
   const visibleTrips = filterByName(trips, query);
 
+  const columns = useMemo<ColumnDef<Trip>[]>(
+    () => [
+      {
+        id: "name",
+        accessorKey: "name",
+        meta: { headerTitle: "Trip" },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Trip" />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+              <MapPin className="size-4" aria-hidden="true" />
+            </span>
+            <Link href={`/trip?id=${row.original.id}`} className="font-medium hover:text-primary">
+              {row.original.name}
+            </Link>
+          </div>
+        ),
+      },
+      {
+        id: "dates",
+        accessorFn: (trip) => formatDates(trip),
+        meta: {
+          headerTitle: "Dates",
+          headerClassName: "hidden sm:table-cell",
+          cellClassName: "hidden sm:table-cell",
+        },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Dates" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{formatDates(row.original)}</span>
+        ),
+      },
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-1">
+            <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(row.original)} />
+            <RecordAction
+              icon={Trash2}
+              label="Delete"
+              onClick={() => setPendingDelete(row.original)}
+            />
+          </div>
+        ),
+      },
+    ],
+    [openEdit],
+  );
+
+  const table = useReactTable({
+    data: visibleTrips,
+    columns,
+    state: { sorting, columnVisibility },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -146,7 +217,10 @@ export function TripsView() {
         description="What you are bringing, per trip."
         breadcrumb={[{ label: "Packing" }, { label: "Trips" }]}
       >
-        <Button onClick={openCreate}>New trip</Button>
+        <Button onClick={openCreate}>
+          <Plus aria-hidden="true" />
+          New trip
+        </Button>
       </PageHeader>
 
       <Card>
@@ -157,63 +231,58 @@ export function TripsView() {
               {trips.length} {trips.length === 1 ? "trip" : "trips"}
             </CardDescription>
           </CardHeading>
+          {!loading && trips.length > 0 ? (
+            <CardToolbar>
+              <ListSearchToolbar
+                id="trip-search"
+                label="Search trips"
+                value={query}
+                onChange={setQuery}
+                placeholder="Search trips"
+              />
+              <DataGridColumnVisibility
+                table={table}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Columns3 aria-hidden="true" />
+                    Columns
+                  </Button>
+                }
+              />
+            </CardToolbar>
+          ) : null}
         </CardHeader>
-        {!loading && trips.length > 0 ? (
-          <div className="px-4 pb-3">
-            <ListSearch
-              id="trip-search"
-              label="Search trips"
-              value={query}
-              onChange={setQuery}
-              placeholder="e.g. Japan"
-            />
+        {loading ? (
+          <div className="flex flex-col gap-2 p-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-12 w-full rounded-md" />
+            ))}
           </div>
-        ) : null}
-        <CardTable>
-          {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>
-          ) : trips.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No trips yet. Create your first one.
+        ) : trips.length === 0 ? (
+          <EmptyState
+            icon={ListChecks}
+            title="No trips yet"
+            description="Create a trip to start building its packing list."
+            action={
+              <Button onClick={openCreate}>
+                <Plus aria-hidden="true" />
+                Create your first trip
+              </Button>
+            }
+          />
+        ) : visibleTrips.length === 0 ? (
+          <EmptyState
+            icon={SearchX}
+            title={`No trips match “${query}”.`}
+            description="Try a different search term."
+          />
+        ) : (
+          <DataGrid table={table} recordCount={visibleTrips.length} tableLayout={{ width: "auto" }}>
+            <div className="overflow-x-auto">
+              <DataGridTable />
             </div>
-          ) : visibleTrips.length === 0 ? (
-            <ListSearchEmpty noun="trips" query={query} />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Trip</TableHead>
-                  <TableHead className="hidden sm:table-cell">Dates</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleTrips.map((trip) => (
-                  <TableRow key={trip.id}>
-                    <TableCell>
-                      <Link href={`/trip?id=${trip.id}`} className="font-medium hover:text-primary">
-                        {trip.name}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {formatDates(trip)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(trip)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(trip)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardTable>
+          </DataGrid>
+        )}
       </Card>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
@@ -289,7 +358,7 @@ export function TripsView() {
 
 export default function TripsPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+    <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
       <TripsView />
     </Suspense>
   );

@@ -1,6 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -19,6 +27,25 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import {
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  GripVertical,
+  Hand,
+  Luggage,
+  PackageOpen,
+  PackageCheck,
+  Pencil,
+  Plus,
+  SearchX,
+  Trash2,
+  Weight,
+} from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
+import { ListSearchToolbar } from "@/components/list-search";
+import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
+import { RecordAction } from "@/components/record-action";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +54,6 @@ import {
   CardDescription,
   CardHeader,
   CardHeading,
-  CardTable,
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,8 +68,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   addAdHocEntry,
   addLibraryBagToTrip,
@@ -110,6 +138,7 @@ import {
   shareExpiryToDate,
   type ShareExpiry,
 } from "@/lib/share";
+import { cn } from "@/lib/utils";
 
 function SortableEntry({
   entry,
@@ -142,16 +171,20 @@ function SortableEntry({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md border bg-card px-2 py-2">
-      <div className="flex items-center gap-2">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-md px-2 py-2 transition-colors hover:bg-muted/40"
+    >
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="cursor-grab touch-none px-1 text-muted-foreground"
+          className="cursor-grab touch-none rounded-sm px-1 text-muted-foreground hover:text-foreground"
           aria-label="Reorder"
           {...attributes}
           {...listeners}
         >
-          ::
+          <GripVertical className="size-4" aria-hidden="true" />
         </button>
         <Checkbox
           checked={entry.is_packed}
@@ -161,7 +194,11 @@ function SortableEntry({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={entry.is_packed ? "text-sm line-through text-muted-foreground" : "text-sm"}
+              className={
+                entry.is_packed
+                  ? "text-sm text-muted-foreground line-through"
+                  : "text-sm text-foreground"
+              }
             >
               {entry.name}
             </span>
@@ -195,24 +232,26 @@ function SortableEntry({
           ))}
         </select>
         {hasDetails ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-expanded={expanded}
-            aria-label={
-              expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
-            }
-            onClick={() => setExpanded((current) => !current)}
-          >
-            {expanded ? "Hide" : "Details"}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                mode="icon"
+                size="sm"
+                aria-expanded={expanded}
+                aria-label={
+                  expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
+                }
+                onClick={() => setExpanded((current) => !current)}
+              >
+                {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{expanded ? "Hide details" : "Show details"}</TooltipContent>
+          </Tooltip>
         ) : null}
-        <Button variant="ghost" size="sm" onClick={() => onEditDetails(entry)}>
-          Edit
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => onDelete(entry)}>
-          Remove
-        </Button>
+        <RecordAction icon={Pencil} label="Edit" onClick={() => onEditDetails(entry)} />
+        <RecordAction icon={Trash2} label="Remove" onClick={() => onDelete(entry)} />
       </div>
       {expanded ? (
         <div className="mt-2 flex flex-col gap-2 pl-8 text-xs text-muted-foreground">
@@ -242,6 +281,7 @@ function SortableEntry({
 
 function EntryGroup({
   title,
+  icon: Icon,
   entries,
   bags,
   unit,
@@ -256,6 +296,7 @@ function EntryGroup({
   onEditDetails,
 }: {
   title: string;
+  icon: typeof Luggage;
   entries: TripEntry[];
   bags: TripBag[];
   unit: DisplayWeightUnit;
@@ -281,22 +322,23 @@ function EntryGroup({
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
-          {title}
-          <span className="text-xs font-normal text-muted-foreground">
-            {entries.filter((entry) => entry.is_packed).length}/{entries.length} packed
-          </span>
-          {weight ? (
-            <WeightSummary weight={weight} limitGrams={limitGrams ?? null} unit={unit} />
-          ) : null}
-          {headerActions ? <span className="ml-auto">{headerActions}</span> : null}
-        </CardTitle>
-      </CardHeader>
-      <CardTable className="flex flex-col gap-2 p-4">
+    <section aria-label={title} className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2 px-2">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Icon className="size-3.5" aria-hidden="true" />
+        </span>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <span className="text-xs text-muted-foreground">
+          {entries.filter((entry) => entry.is_packed).length}/{entries.length} packed
+        </span>
+        {weight ? (
+          <WeightSummary weight={weight} limitGrams={limitGrams ?? null} unit={unit} />
+        ) : null}
+        {headerActions ? <span className="ms-auto">{headerActions}</span> : null}
+      </div>
+      <div className="divide-y divide-border">
         {entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nothing here yet.</p>
+          <p className="px-2 py-3 text-xs text-muted-foreground">Nothing here yet.</p>
         ) : (
           <DndContext
             sensors={sensors}
@@ -307,25 +349,23 @@ function EntryGroup({
               items={entries.map((entry) => entry.id)}
               strategy={verticalListSortingStrategy}
             >
-              <div className="flex flex-col gap-2">
-                {entries.map((entry) => (
-                  <SortableEntry
-                    key={entry.id}
-                    entry={entry}
-                    bags={bags}
-                    onTogglePacked={onTogglePacked}
-                    onMove={onMove}
-                    onChangeQty={onChangeQty}
-                    onDelete={onDelete}
-                    onEditDetails={onEditDetails}
-                  />
-                ))}
-              </div>
+              {entries.map((entry) => (
+                <SortableEntry
+                  key={entry.id}
+                  entry={entry}
+                  bags={bags}
+                  onTogglePacked={onTogglePacked}
+                  onMove={onMove}
+                  onChangeQty={onChangeQty}
+                  onDelete={onDelete}
+                  onEditDetails={onEditDetails}
+                />
+              ))}
             </SortableContext>
           </DndContext>
         )}
-      </CardTable>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -340,16 +380,20 @@ export function TripView() {
   const [libraryItems, setLibraryItems] = useState<ReusableItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMode, setAddMode] = useState<"item" | "bag" | "oneoff">("item");
   const [addBagId, setAddBagId] = useState("");
   const [addItemId, setAddItemId] = useState("");
   const [addItemDestination, setAddItemDestination] = useState<Destination>("loose");
   const [adhocName, setAdhocName] = useState("");
   const [adhocQty, setAdhocQty] = useState("1");
   const [adhocDestination, setAdhocDestination] = useState<Destination>("loose");
+  const adhocInputRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [unit, setUnit] = useState<DisplayWeightUnit>("kg");
+  const [weightOpen, setWeightOpen] = useState(false);
   const [detailEntry, setDetailEntry] = useState<TripEntry | null>(null);
   const [detailDescription, setDetailDescription] = useState("");
   const [detailLink, setDetailLink] = useState("");
@@ -362,6 +406,11 @@ export function TripView() {
   const [shareUrl, setShareUrl] = useState("");
   const [shareExpiry, setShareExpiry] = useState<ShareExpiry>("never");
   const [shareBusy, setShareBusy] = useState(false);
+
+  function openAdd(mode: "item" | "bag" | "oneoff") {
+    setAddMode(mode);
+    setAddOpen(true);
+  }
 
   function openShare() {
     setShareOpen(true);
@@ -460,9 +509,14 @@ export function TripView() {
 
   const progress = useMemo(() => packingProgress(entries), [entries]);
 
+  const searchedEntries = useMemo(
+    () => (search.trim() ? searchEntries(entries, search) : entries),
+    [entries, search],
+  );
+
   const filteredEntries = useMemo(
-    () => filterEntriesByCategory(entries, categoryFilter),
-    [entries, categoryFilter],
+    () => filterEntriesByCategory(searchedEntries, categoryFilter),
+    [searchedEntries, categoryFilter],
   );
 
   const {
@@ -471,36 +525,52 @@ export function TripView() {
     loose: looseEntries,
   } = useMemo(() => groupEntries(filteredEntries, bags), [filteredEntries, bags]);
 
-  const searchResults = useMemo(() => searchEntries(entries, search), [entries, search]);
-
   const categoryBreakdown = useMemo(() => weightByCategory(entries), [entries]);
 
   const baggageTotal = useMemo(() => tripBaggageTotal(bags, entries), [bags, entries]);
 
   const bagTree = useMemo(() => buildBagTree(bags), [bags]);
 
-  async function run(action: () => Promise<unknown>, success: string) {
+  const libraryBagOptions = useMemo<LibraryPickerOption[]>(
+    () => libraryBags.map((bag) => ({ id: bag.id, name: bag.name })),
+    [libraryBags],
+  );
+
+  const libraryItemOptions = useMemo<LibraryPickerOption[]>(
+    () =>
+      libraryItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        detail: item.category ? ITEM_CATEGORY_LABELS[item.category] : undefined,
+      })),
+    [libraryItems],
+  );
+
+  async function run(action: () => Promise<unknown>, success: string): Promise<boolean> {
     try {
       await action();
       toast.success(success);
       await refresh();
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Something went wrong");
+      return false;
     }
   }
 
-  function handleAddBag() {
+  async function handleAddBag() {
     if (!addBagId) return;
-    void run(async () => {
+    const ok = await run(async () => {
       await addLibraryBagToTrip(tripId, addBagId);
       setAddBagId("");
     }, "Bag added");
+    if (ok) setAddOpen(false);
   }
 
-  function handleAddLibraryItem() {
+  async function handleAddLibraryItem() {
     if (!addItemId) return;
     const destination = addItemDestination;
-    void run(async () => {
+    const ok = await run(async () => {
       const bagId = destinationBagId(destination);
       const entryId = await addLibraryItemToTrip(tripId, addItemId, bagId);
       if (destination === "with_me") {
@@ -508,12 +578,13 @@ export function TripView() {
       }
       setAddItemId("");
     }, "Item added");
+    if (ok) setAddOpen(false);
   }
 
-  function handleAddAdHoc(event: FormEvent<HTMLFormElement>) {
+  async function handleAddAdHoc(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const destination = adhocDestination;
-    void run(async () => {
+    const ok = await run(async () => {
       const bagId = destinationBagId(destination);
       const entry = await addAdHocEntry({
         tripId,
@@ -527,6 +598,7 @@ export function TripView() {
       setAdhocName("");
       setAdhocQty("1");
     }, "Item added");
+    if (ok) setAddOpen(false);
   }
 
   function handleTogglePacked(entry: TripEntry) {
@@ -573,6 +645,7 @@ export function TripView() {
         <div key={node.bag.id} className="flex flex-col gap-4">
           <EntryGroup
             title={node.bag.name}
+            icon={Luggage}
             entries={entriesByBag.get(node.bag.id) ?? []}
             bags={bags}
             unit={unit}
@@ -650,7 +723,7 @@ export function TripView() {
   }
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading...</p>;
+    return <Skeleton className="h-64 w-full rounded-lg" />;
   }
 
   if (!trip) {
@@ -675,17 +748,6 @@ export function TripView() {
         ]}
       >
         <div className="flex flex-wrap items-center gap-3">
-          <Progress
-            value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
-            className="h-2 w-32"
-          />
-          <span className="text-xs text-muted-foreground">
-            {progress.packed}/{progress.total} packed
-          </span>
-          <span className="text-xs text-muted-foreground">
-            Total {formatWeight(baggageTotal.grams, unit)}
-            {baggageTotal.complete ? "" : " (incomplete)"}
-          </span>
           <Button
             type="button"
             variant="outline"
@@ -702,253 +764,296 @@ export function TripView() {
       </PageHeader>
 
       <Card>
-        <CardHeader>
-          <CardHeading>
-            <CardTitle>Add to trip</CardTitle>
-            <CardDescription>Pull from your library or add a one-off item.</CardDescription>
-          </CardHeading>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 py-4">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="add-bag">Add a bag from your library</Label>
-              <select
-                id="add-bag"
-                className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
-                value={addBagId}
-                onChange={(event) => setAddBagId(event.target.value)}
-              >
-                <option value="">Select a bag</option>
-                {libraryBags.map((bag) => (
-                  <option key={bag.id} value={bag.id}>
-                    {bag.name}
-                  </option>
-                ))}
-              </select>
+        <CardContent className="flex items-center gap-4 p-5">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+            <PackageCheck className="size-5" aria-hidden="true" />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+              <span className="font-medium text-foreground">
+                {progress.packed}/{progress.total} packed
+              </span>
+              <span className="text-muted-foreground">
+                Total {formatWeight(baggageTotal.grams, unit)}
+                {baggageTotal.complete ? "" : " (incomplete)"}
+              </span>
             </div>
-            <Button type="button" onClick={handleAddBag} disabled={!addBagId}>
-              Add bag
-            </Button>
+            <Progress
+              value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
+              className="h-1.5 w-full"
+            />
           </div>
-
-          <Separator />
-
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="add-item">Add an item from your library</Label>
-              <select
-                id="add-item"
-                className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
-                value={addItemId}
-                onChange={(event) => setAddItemId(event.target.value)}
-              >
-                <option value="">Select an item</option>
-                {libraryItems.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <select
-              className="h-8.5 rounded-md border border-input bg-background px-3 text-[0.8125rem]"
-              value={addItemDestination}
-              onChange={(event) => setAddItemDestination(event.target.value)}
-              aria-label="Destination for library item"
-            >
-              <option value="loose">Loose</option>
-              <option value="with_me">With Me</option>
-              {bags.map((bag) => (
-                <option key={bag.id} value={`bag:${bag.id}`}>
-                  {bag.name}
-                </option>
-              ))}
-            </select>
-            <Button type="button" onClick={handleAddLibraryItem} disabled={!addItemId}>
-              Add item
-            </Button>
-          </div>
-
-          <Separator />
-
-          <form className="flex items-end gap-2" onSubmit={handleAddAdHoc}>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="adhoc-name">Add a one-off item</Label>
-              <Input
-                id="adhoc-name"
-                value={adhocName}
-                onChange={(event) => setAdhocName(event.target.value)}
-                placeholder="e.g. Travel adapter"
-              />
-            </div>
-            <div className="w-20">
-              <Label htmlFor="adhoc-qty">Qty</Label>
-              <Input
-                id="adhoc-qty"
-                type="number"
-                min={1}
-                step={1}
-                value={adhocQty}
-                onChange={(event) => setAdhocQty(event.target.value)}
-              />
-            </div>
-            <select
-              className="h-8.5 rounded-md border border-input bg-background px-3 text-[0.8125rem]"
-              value={adhocDestination}
-              onChange={(event) => setAdhocDestination(event.target.value)}
-              aria-label="Destination for one-off item"
-            >
-              <option value="loose">Loose</option>
-              <option value="with_me">With Me</option>
-              {bags.map((bag) => (
-                <option key={bag.id} value={`bag:${bag.id}`}>
-                  {bag.name}
-                </option>
-              ))}
-            </select>
-            <Button type="submit">Add</Button>
-          </form>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardHeading>
-            <CardTitle>Find an item</CardTitle>
-            <CardDescription>Search this trip to see which bag an item is in.</CardDescription>
-          </CardHeading>
-        </CardHeader>
-        <CardContent className="py-4">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="trip-search">Search items</Label>
-              <Input
+        <CardContent className="flex flex-col gap-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={() => openAdd("item")}>
+              <Plus aria-hidden="true" />
+              Add to trip
+            </Button>
+            <div className="min-w-48 flex-1">
+              <ListSearchToolbar
                 id="trip-search"
+                label="Search items"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="e.g. passport"
+                onChange={setSearch}
+                placeholder="Search this list"
               />
             </div>
-            {search ? (
-              <Button type="button" variant="outline" onClick={() => setSearch("")}>
-                Clear
-              </Button>
-            ) : null}
           </div>
+          {entries.length > 0 ? (
+            <CategoryFilterChips
+              entries={entries}
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              label="Filter entries by category"
+            />
+          ) : null}
         </CardContent>
       </Card>
 
+      {search.trim() && filteredEntries.length === 0 ? (
+        <EmptyState
+          icon={SearchX}
+          title={`No items match “${search}”.`}
+          description="Try a different search term."
+        />
+      ) : progress.total === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title="Nothing on this list yet."
+          description="Pull a bag or an item from your library, or add a one-off item."
+          action={
+            <Button onClick={() => openAdd("oneoff")}>
+              <Plus aria-hidden="true" />
+              Add your first item
+            </Button>
+          }
+        />
+      ) : filteredEntries.length === 0 ? (
+        <EmptyState
+          icon={SearchX}
+          title="No entries in this category."
+          description="Choose another category to see the rest of the list."
+          action={
+            <Button variant="outline" onClick={() => setCategoryFilter("all")}>
+              Show all categories
+            </Button>
+          }
+        />
+      ) : (
+        <div className="flex flex-col gap-5">
+          {search.trim() ? (
+            <p className="px-2 text-sm font-medium text-foreground">
+              {filteredEntries.length} {filteredEntries.length === 1 ? "match" : "matches"}
+            </p>
+          ) : null}
+          {renderBagTree(bagTree, 0)}
+          <EntryGroup
+            title="With Me"
+            icon={Hand}
+            entries={withMeEntries}
+            bags={bags}
+            unit={unit}
+            onTogglePacked={handleTogglePacked}
+            onMove={handleMove}
+            onChangeQty={handleChangeQty}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onEditDetails={openDetails}
+          />
+          <EntryGroup
+            title="Not assigned"
+            icon={PackageOpen}
+            entries={looseEntries}
+            bags={bags}
+            unit={unit}
+            onTogglePacked={handleTogglePacked}
+            onMove={handleMove}
+            onChangeQty={handleChangeQty}
+            onDelete={handleDelete}
+            onReorder={handleReorder}
+            onEditDetails={openDetails}
+          />
+        </div>
+      )}
+
       {entries.length > 0 ? (
         <Card>
-          <CardHeader>
-            <CardHeading>
-              <CardTitle>Weight by category</CardTitle>
-              <CardDescription>
-                Whole list, including With Me and unassigned items. Separate from the baggage total.
-              </CardDescription>
-            </CardHeading>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 py-4">
-            {categoryBreakdown.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No weights yet.</p>
-            ) : (
-              categoryBreakdown.map((row) => (
-                <div
-                  key={row.category ?? "uncategorised"}
-                  className="flex items-center justify-between gap-2 text-sm"
-                >
-                  <span>
-                    {row.category === null ? "Uncategorised" : ITEM_CATEGORY_LABELS[row.category]}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {formatWeight(row.grams, unit)}
-                    {row.complete ? "" : " (incomplete)"}
-                  </span>
-                </div>
-              ))
-            )}
-          </CardContent>
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-2 px-5 py-3.5 text-sm font-medium text-foreground"
+            aria-expanded={weightOpen}
+            onClick={() => setWeightOpen((current) => !current)}
+          >
+            <Weight className="size-4 text-muted-foreground" aria-hidden="true" />
+            Weight by category
+            <ChevronDown
+              className={cn(
+                "ms-auto size-4 text-muted-foreground transition-transform",
+                weightOpen && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </button>
+          {weightOpen ? (
+            <CardContent className="flex flex-col gap-2 border-t border-border pt-4">
+              {categoryBreakdown.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No weights yet.</p>
+              ) : (
+                categoryBreakdown.map((row) => (
+                  <div
+                    key={row.category ?? "uncategorised"}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span>
+                      {row.category === null ? "Uncategorised" : ITEM_CATEGORY_LABELS[row.category]}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatWeight(row.grams, unit)}
+                      {row.complete ? "" : " (incomplete)"}
+                    </span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          ) : null}
         </Card>
       ) : null}
 
-      {search.trim() ? (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">
-              {searchResults.length} {searchResults.length === 1 ? "match" : "matches"}
-            </CardTitle>
-          </CardHeader>
-          <CardTable className="flex flex-col gap-2 p-4">
-            {searchResults.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No items match &ldquo;{search}&rdquo;.
-              </p>
-            ) : (
-              searchResults.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-2"
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to trip</DialogTitle>
+            <DialogDescription>
+              Pull something from your library, or add a one-off.
+            </DialogDescription>
+          </DialogHeader>
+          <Tabs
+            value={addMode}
+            onValueChange={(value) => setAddMode(value as "item" | "bag" | "oneoff")}
+            className="py-4"
+          >
+            <TabsList variant="line" className="w-full">
+              <TabsTrigger value="item">Library item</TabsTrigger>
+              <TabsTrigger value="bag">Library bag</TabsTrigger>
+              <TabsTrigger value="oneoff">One-off item</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="item" className="flex flex-col gap-3 pt-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="add-item">Add an item from your library</Label>
+                <LibraryPicker
+                  id="add-item"
+                  label="Add an item from your library"
+                  placeholder="Select an item"
+                  value={addItemId}
+                  onChange={setAddItemId}
+                  options={libraryItemOptions}
+                  emptyMessage="No items in your library yet."
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="add-item-destination">Destination</Label>
+                <select
+                  id="add-item-destination"
+                  className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                  value={addItemDestination}
+                  onChange={(event) => setAddItemDestination(event.target.value)}
+                  aria-label="Destination for library item"
                 >
-                  <span className="text-sm">{entry.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {entryLocationPath(entry, bags)}
-                  </span>
+                  <option value="loose">Loose</option>
+                  <option value="with_me">With Me</option>
+                  {bags.map((bag) => (
+                    <option key={bag.id} value={`bag:${bag.id}`}>
+                      {bag.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                type="button"
+                onClick={() => void handleAddLibraryItem()}
+                disabled={!addItemId}
+              >
+                Add item
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="bag" className="flex flex-col gap-3 pt-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="add-bag">Add a bag from your library</Label>
+                <LibraryPicker
+                  id="add-bag"
+                  label="Add a bag from your library"
+                  placeholder="Select a bag"
+                  value={addBagId}
+                  onChange={setAddBagId}
+                  options={libraryBagOptions}
+                  emptyMessage="No bags in your library yet."
+                />
+              </div>
+              <Button type="button" onClick={() => void handleAddBag()} disabled={!addBagId}>
+                Add bag
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="oneoff" className="pt-4">
+              <form className="flex flex-col gap-3" onSubmit={handleAddAdHoc}>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="adhoc-name">Add a one-off item</Label>
+                  <Input
+                    ref={adhocInputRef}
+                    id="adhoc-name"
+                    value={adhocName}
+                    onChange={(event) => setAdhocName(event.target.value)}
+                    placeholder="e.g. Travel adapter"
+                  />
                 </div>
-              ))
-            )}
-          </CardTable>
-        </Card>
-      ) : progress.total === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Nothing on this list yet. Add a bag or an item above.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <CategoryFilterChips
-            entries={entries}
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            label="Filter entries by category"
-          />
-          {filteredEntries.length === 0 ? (
-            <Card>
-              <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                No entries in this category.
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              {renderBagTree(bagTree, 0)}
-              <EntryGroup
-                title="With Me"
-                entries={withMeEntries}
-                bags={bags}
-                unit={unit}
-                onTogglePacked={handleTogglePacked}
-                onMove={handleMove}
-                onChangeQty={handleChangeQty}
-                onDelete={handleDelete}
-                onReorder={handleReorder}
-                onEditDetails={openDetails}
-              />
-              <EntryGroup
-                title="Not assigned"
-                entries={looseEntries}
-                bags={bags}
-                unit={unit}
-                onTogglePacked={handleTogglePacked}
-                onMove={handleMove}
-                onChangeQty={handleChangeQty}
-                onDelete={handleDelete}
-                onReorder={handleReorder}
-                onEditDetails={openDetails}
-              />
-            </>
-          )}
-        </div>
-      )}
+                <div className="flex gap-3">
+                  <div className="w-24">
+                    <Label htmlFor="adhoc-qty">Qty</Label>
+                    <Input
+                      id="adhoc-qty"
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={adhocQty}
+                      onChange={(event) => setAdhocQty(event.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label htmlFor="adhoc-destination">Destination</Label>
+                    <select
+                      id="adhoc-destination"
+                      className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                      value={adhocDestination}
+                      onChange={(event) => setAdhocDestination(event.target.value)}
+                      aria-label="Destination for one-off item"
+                    >
+                      <option value="loose">Loose</option>
+                      <option value="with_me">With Me</option>
+                      {bags.map((bag) => (
+                        <option key={bag.id} value={`bag:${bag.id}`}>
+                          {bag.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <Button type="submit">Add</Button>
+              </form>
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={detailEntry !== null} onOpenChange={(open) => !open && setDetailEntry(null)}>
         <DialogContent>
@@ -1036,9 +1141,11 @@ export function TripView() {
                 <Label htmlFor="share-url">Link</Label>
                 <Input id="share-url" readOnly value={shareUrl} />
               </div>
+            ) : shareBusy ? (
+              <Skeleton className="h-9 w-full rounded-md" />
             ) : (
               <p className="text-sm text-muted-foreground">
-                {shareBusy ? "Loading..." : "No link yet. Create one to share this list."}
+                No link yet. Create one to share this list.
               </p>
             )}
             <div className="flex flex-col gap-1.5">
@@ -1089,7 +1196,7 @@ export function TripView() {
 
 export default function TripPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+    <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
       <TripView />
     </Suspense>
   );

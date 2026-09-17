@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Trip, TripBag, TripEntry } from "@/lib/types";
+import type { ReusableBag, ReusableItem, Trip, TripBag, TripEntry } from "@/lib/types";
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("id=t1"),
@@ -59,6 +59,27 @@ const bag: TripBag = {
   parent_bag_id: null,
 };
 
+const libraryBag: ReusableBag = {
+  id: "lb1",
+  user_id: "u1",
+  name: "Main backpack",
+  weight_limit_grams: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+const libraryItem: ReusableItem = {
+  id: "li1",
+  user_id: "u1",
+  name: "Passport",
+  default_qty: 2,
+  description: null,
+  link: null,
+  image_url: null,
+  weight_grams: null,
+  category: "documents",
+  created_at: "2026-01-01T00:00:00Z",
+};
+
 function entry(partial: Partial<TripEntry> & { id: string }): TripEntry {
   return {
     trip_id: "t1",
@@ -86,8 +107,12 @@ beforeEach(() => {
 });
 
 function bagCard(name: string): HTMLElement {
-  const title = screen.getByText(name, { selector: '[data-slot="card-title"]' });
-  return title.closest('[data-slot="card"]') as HTMLElement;
+  return screen.getByRole("region", { name });
+}
+
+async function openAddDialog(user: ReturnType<typeof userEvent.setup>, tab: RegExp) {
+  await user.click(await screen.findByRole("button", { name: /add to trip/i }));
+  await user.click(await screen.findByRole("tab", { name: tab }));
 }
 
 describe("TripView", () => {
@@ -132,7 +157,7 @@ describe("TripView", () => {
     vi.mocked(data.addAdHocEntry).mockResolvedValue(entry({ id: "e1", name: "Adapter" }));
     const user = userEvent.setup();
     render(<TripView />);
-    await screen.findByLabelText("Add a one-off item");
+    await openAddDialog(user, /one-off item/i);
 
     await user.type(screen.getByLabelText("Add a one-off item"), "Adapter");
     await user.click(screen.getByRole("button", { name: /^add$/i }));
@@ -145,6 +170,43 @@ describe("TripView", () => {
         tripBagId: null,
       }),
     );
+  });
+
+  it("adds a library bag chosen from the picker", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    vi.mocked(data.listBags).mockResolvedValue([libraryBag]);
+    vi.mocked(data.addLibraryBagToTrip).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await openAddDialog(user, /library bag/i);
+
+    await user.click(screen.getByLabelText("Add a bag from your library"));
+    await user.type(screen.getByLabelText("Search options"), "backpack");
+    await user.click(await screen.findByRole("option", { name: /Main backpack/ }));
+    await user.click(screen.getByRole("button", { name: /^add bag$/i }));
+
+    await waitFor(() => expect(data.addLibraryBagToTrip).toHaveBeenCalledWith("t1", "lb1"));
+  });
+
+  it("adds a library item chosen from the picker to the chosen destination", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([bag]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    vi.mocked(data.listItems).mockResolvedValue([libraryItem]);
+    vi.mocked(data.addLibraryItemToTrip).mockResolvedValue("e1");
+    const user = userEvent.setup();
+    render(<TripView />);
+    await openAddDialog(user, /library item/i);
+
+    await user.click(screen.getByLabelText("Add an item from your library"));
+    await user.type(screen.getByLabelText("Search options"), "pass");
+    await user.click(await screen.findByRole("option", { name: /Passport/ }));
+    await user.selectOptions(screen.getByLabelText("Destination for library item"), "bag:b1");
+    await user.click(screen.getByRole("button", { name: /^add item$/i }));
+
+    await waitFor(() => expect(data.addLibraryItemToTrip).toHaveBeenCalledWith("t1", "li1", "b1"));
   });
 
   it("shows an empty state when the list has no entries", async () => {
@@ -186,9 +248,9 @@ describe("TripView", () => {
     await user.type(screen.getByLabelText("Search items"), "pass");
 
     expect(await screen.findByText("1 match")).toBeInTheDocument();
-    const passport = screen.getByText("Passport");
-    expect(passport).toBeInTheDocument();
-    expect(passport.parentElement?.textContent).toContain("With Me");
+    const withMe = screen.getByRole("region", { name: "With Me" });
+    expect(within(withMe).getByText("Passport")).toBeInTheDocument();
+    expect(screen.queryByText("Charger")).not.toBeInTheDocument();
   });
 
   it("shows an empty state when nothing matches the search", async () => {
@@ -215,7 +277,7 @@ describe("TripView", () => {
     await user.type(screen.getByLabelText("Search items"), "charger");
     expect(await screen.findByText("1 match")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+    await user.click(screen.getByRole("button", { name: /clear/i }));
 
     expect(await screen.findByText(/not assigned/i)).toBeInTheDocument();
   });
@@ -510,10 +572,16 @@ describe("TripView", () => {
       }),
       entry({ id: "e4", name: "Adapter" }),
     ]);
+    const user = userEvent.setup();
     render(<TripView />);
 
-    const heading = await screen.findByText("Weight by category");
-    const card = heading.closest('[data-slot="card"]') as HTMLElement;
+    const toggle = await screen.findByRole("button", { name: /weight by category/i });
+    const card = toggle.closest('[data-slot="card"]') as HTMLElement;
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(card).queryByText("Clothing")).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
     expect(within(card).getByText("Clothing")).toBeInTheDocument();
     expect(within(card).getByText("1.00 kg")).toBeInTheDocument();
     expect(within(card).getByText("0.50 kg")).toBeInTheDocument();

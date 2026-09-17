@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "./auth-provider";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -16,8 +17,8 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        Loading...
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Skeleton className="h-64 w-full max-w-3xl rounded-lg" />
       </div>
     );
   }

@@ -1,9 +1,21 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ListSearch, ListSearchEmpty } from "@/components/list-search";
+import { Columns3, ListTree, Luggage, PackageOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { EmptyState } from "@/components/empty-state";
+import { RecordAction } from "@/components/record-action";
+import { ListSearchToolbar } from "@/components/list-search";
+import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,17 +23,13 @@ import {
   CardDescription,
   CardHeader,
   CardHeading,
-  CardTable,
   CardTitle,
+  CardToolbar,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataGrid } from "@/components/ui/data-grid";
+import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
+import { DataGridColumnVisibility } from "@/components/ui/data-grid-column-visibility";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +41,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,7 +65,7 @@ import {
 } from "@/lib/data";
 import type { DisplayWeightUnit, ReusableBag, ReusableBagItem, ReusableItem } from "@/lib/types";
 import { filterByName } from "@/lib/packing";
-import { parseQty, validateName } from "@/lib/validation";
+import { parseQty, validateName, ITEM_CATEGORY_LABELS } from "@/lib/validation";
 import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
 
 export function BagsView() {
@@ -76,6 +85,8 @@ export function BagsView() {
   const [contents, setContents] = useState<ReusableBagItem[]>([]);
   const [addItemId, setAddItemId] = useState("");
   const [addQty, setAddQty] = useState("1");
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
@@ -109,16 +120,19 @@ export function BagsView() {
     setEditorOpen(true);
   }
 
-  function openEdit(bag: ReusableBag) {
-    setEditing(bag);
-    setName(bag.name);
-    setLimit(
-      bag.weight_limit_grams === null
-        ? ""
-        : String(Number(fromGrams(bag.weight_limit_grams, weightUnit).toFixed(2))),
-    );
-    setEditorOpen(true);
-  }
+  const openEdit = useCallback(
+    (bag: ReusableBag) => {
+      setEditing(bag);
+      setName(bag.name);
+      setLimit(
+        bag.weight_limit_grams === null
+          ? ""
+          : String(Number(fromGrams(bag.weight_limit_grams, weightUnit).toFixed(2))),
+      );
+      setEditorOpen(true);
+    },
+    [weightUnit],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -157,7 +171,7 @@ export function BagsView() {
     }
   }
 
-  async function openContents(bag: ReusableBag) {
+  const openContents = useCallback(async (bag: ReusableBag) => {
     setContentsBag(bag);
     setAddItemId("");
     setAddQty("1");
@@ -166,7 +180,7 @@ export function BagsView() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load contents");
     }
-  }
+  }, []);
 
   async function handleAddContent() {
     if (!contentsBag || !addItemId) return;
@@ -192,6 +206,74 @@ export function BagsView() {
 
   const visibleBags = filterByName(bags, query);
 
+  const itemOptions = useMemo<LibraryPickerOption[]>(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        detail: item.category ? ITEM_CATEGORY_LABELS[item.category] : undefined,
+      })),
+    [items],
+  );
+
+  const columns = useMemo<ColumnDef<ReusableBag>[]>(
+    () => [
+      {
+        id: "name",
+        accessorKey: "name",
+        meta: { headerTitle: "Bag" },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Bag" />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+              <Luggage className="size-4" aria-hidden="true" />
+            </span>
+            <div className="flex min-w-0 flex-col">
+              <span className="font-medium">{row.original.name}</span>
+              {row.original.weight_limit_grams !== null ? (
+                <span className="text-xs text-muted-foreground">
+                  Limit {formatWeight(row.original.weight_limit_grams, weightUnit)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-1">
+            <RecordAction
+              icon={ListTree}
+              label="Contents"
+              onClick={() => void openContents(row.original)}
+            />
+            <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(row.original)} />
+            <RecordAction
+              icon={Trash2}
+              label="Delete"
+              onClick={() => setPendingDelete(row.original)}
+            />
+          </div>
+        ),
+      },
+    ],
+    [openContents, openEdit, weightUnit],
+  );
+
+  const table = useReactTable({
+    data: visibleBags,
+    columns,
+    state: { sorting, columnVisibility },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -199,7 +281,10 @@ export function BagsView() {
         description="Reusable containers and their usual contents."
         breadcrumb={[{ label: "Library" }, { label: "Bags" }]}
       >
-        <Button onClick={openCreate}>Add bag</Button>
+        <Button onClick={openCreate}>
+          <Plus aria-hidden="true" />
+          Add bag
+        </Button>
       </PageHeader>
 
       <Card>
@@ -210,65 +295,58 @@ export function BagsView() {
               {bags.length} {bags.length === 1 ? "bag" : "bags"}
             </CardDescription>
           </CardHeading>
+          {!loading && bags.length > 0 ? (
+            <CardToolbar>
+              <ListSearchToolbar
+                id="bag-search"
+                label="Search bags"
+                value={query}
+                onChange={setQuery}
+                placeholder="Search bags"
+              />
+              <DataGridColumnVisibility
+                table={table}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Columns3 aria-hidden="true" />
+                    Columns
+                  </Button>
+                }
+              />
+            </CardToolbar>
+          ) : null}
         </CardHeader>
-        {!loading && bags.length > 0 ? (
-          <div className="px-4 pb-3">
-            <ListSearch
-              id="bag-search"
-              label="Search bags"
-              value={query}
-              onChange={setQuery}
-              placeholder="e.g. daypack"
-            />
+        {loading ? (
+          <div className="flex flex-col gap-2 p-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-12 w-full rounded-md" />
+            ))}
           </div>
-        ) : null}
-        <CardTable>
-          {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>
-          ) : bags.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No bags yet. Add your first one.
+        ) : bags.length === 0 ? (
+          <EmptyState
+            icon={Luggage}
+            title="No bags yet"
+            description="Add your first one to reuse it across trips."
+            action={
+              <Button onClick={openCreate}>
+                <Plus aria-hidden="true" />
+                Add your first bag
+              </Button>
+            }
+          />
+        ) : visibleBags.length === 0 ? (
+          <EmptyState
+            icon={PackageOpen}
+            title={`No bags match “${query}”.`}
+            description="Try a different search term."
+          />
+        ) : (
+          <DataGrid table={table} recordCount={visibleBags.length} tableLayout={{ width: "auto" }}>
+            <div className="overflow-x-auto">
+              <DataGridTable />
             </div>
-          ) : visibleBags.length === 0 ? (
-            <ListSearchEmpty noun="bags" query={query} />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Bag</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleBags.map((bag) => (
-                  <TableRow key={bag.id}>
-                    <TableCell>
-                      <span className="font-medium">{bag.name}</span>
-                      {bag.weight_limit_grams !== null ? (
-                        <span className="block text-xs text-muted-foreground">
-                          Limit {formatWeight(bag.weight_limit_grams, weightUnit)}
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <Button variant="outline" size="sm" onClick={() => void openContents(bag)}>
-                          Contents
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => openEdit(bag)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(bag)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardTable>
+          </DataGrid>
+        )}
       </Card>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
@@ -343,19 +421,15 @@ export function BagsView() {
             <div className="flex items-end gap-2">
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label htmlFor="content-item">Item</Label>
-                <select
+                <LibraryPicker
                   id="content-item"
-                  className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                  label="Item"
+                  placeholder="Select an item"
                   value={addItemId}
-                  onChange={(event) => setAddItemId(event.target.value)}
-                >
-                  <option value="">Select an item</option>
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAddItemId}
+                  options={itemOptions}
+                  emptyMessage="No items in your library yet."
+                />
               </div>
               <div className="w-20">
                 <Label htmlFor="content-qty">Qty</Label>
@@ -400,7 +474,7 @@ export function BagsView() {
 
 export default function BagsPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+    <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
       <BagsView />
     </Suspense>
   );

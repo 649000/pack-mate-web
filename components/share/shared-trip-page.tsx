@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Backpack, Link2Off, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardTable } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { SharedTripView } from "@/components/share/shared-trip-view";
 import { getSharedTrip } from "@/lib/data";
 import { isShareToken, shareTokenFromSearch } from "@/lib/share";
@@ -57,26 +60,40 @@ export function SharedTripPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Shared packing list
-        </span>
+        <div className="flex flex-col gap-0.5">
+          <Link
+            href="/"
+            className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
+          >
+            <Backpack className="size-4" aria-hidden="true" />
+            Pack Mate
+          </Link>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Shared packing list
+          </span>
+        </div>
         {state.status === "ready" ? (
           <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
-            <RefreshCw className="size-4" />
+            <RefreshCw className="size-4" aria-hidden="true" />
             {refreshing ? "Refreshing..." : "Refresh"}
           </Button>
         ) : null}
       </div>
 
-      {state.status === "loading" ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">Loading shared list...</p>
-      ) : null}
+      {state.status === "loading" ? <Skeleton className="h-64 w-full rounded-lg" /> : null}
 
       {state.status === "unavailable" ? (
         <Card>
-          <CardTable className="p-10 text-center text-sm text-muted-foreground">
-            This shared list is not available.
-          </CardTable>
+          <EmptyState
+            icon={Link2Off}
+            title="This shared list is not available."
+            description="The link may have been revoked or expired."
+            action={
+              <Button asChild>
+                <Link href="/">Go to Pack Mate</Link>
+              </Button>
+            }
+          />
         </Card>
       ) : null}
 

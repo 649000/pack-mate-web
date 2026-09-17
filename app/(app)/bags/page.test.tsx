@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReusableBag } from "@/lib/types";
+import type { ReusableBag, ReusableItem } from "@/lib/types";
 
 const params = vi.hoisted(() => ({ current: "" }));
 
@@ -33,6 +33,19 @@ const bag: ReusableBag = {
   user_id: "u1",
   name: "Electronics",
   weight_limit_grams: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
+const item: ReusableItem = {
+  id: "i1",
+  user_id: "u1",
+  name: "Passport",
+  default_qty: 1,
+  description: null,
+  link: null,
+  image_url: null,
+  weight_grams: null,
+  category: "documents",
   created_at: "2026-01-01T00:00:00Z",
 };
 
@@ -105,6 +118,31 @@ describe("BagsView", () => {
     await user.click(screen.getByRole("button", { name: /contents/i }));
     expect(await screen.findByText(/no default contents yet/i)).toBeInTheDocument();
     expect(data.listBagContents).toHaveBeenCalledWith("b1");
+  });
+
+  it("adds an item to a bag's default contents from the picker", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    vi.mocked(data.listItems).mockResolvedValue([item]);
+    vi.mocked(data.addBagItem).mockResolvedValue({
+      id: "bi1",
+      bag_id: "b1",
+      item_id: "i1",
+      qty: 1,
+      position: 0,
+    });
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText("Electronics");
+
+    await user.click(screen.getByRole("button", { name: /contents/i }));
+    await screen.findByText(/no default contents yet/i);
+
+    await user.click(screen.getByLabelText("Item"));
+    await user.type(screen.getByLabelText("Search options"), "pass");
+    await user.click(await screen.findByRole("option", { name: /Passport/ }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => expect(data.addBagItem).toHaveBeenCalledWith("b1", "i1", 1));
   });
 
   it("edits a bag", async () => {

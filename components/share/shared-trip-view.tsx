@@ -1,4 +1,5 @@
-import { Check } from "lucide-react";
+import Link from "next/link";
+import { Backpack, Check, ClipboardList } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -7,7 +8,9 @@ import {
   CardTable,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { EmptyState } from "@/components/empty-state";
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import {
@@ -63,7 +66,7 @@ function SharedEntryRow({
   const nestedPath = locationPath.includes(" > ") ? locationPath : null;
 
   return (
-    <div className="rounded-md border bg-card px-2 py-2">
+    <div className="rounded-md border bg-card px-2 py-2 transition-colors hover:bg-muted/40">
       <div className="flex items-center gap-2">
         <PackedIndicator packed={entry.is_packed} />
         <span
@@ -250,9 +253,11 @@ export function SharedTripView({
 
       {entries.length === 0 && bags.length === 0 ? (
         <Card>
-          <CardTable className="p-10 text-center text-sm text-muted-foreground">
-            This packing list is empty.
-          </CardTable>
+          <EmptyState
+            icon={ClipboardList}
+            title="This packing list is empty."
+            description="Nothing has been added to this list yet."
+          />
         </Card>
       ) : null}
 
@@ -265,6 +270,25 @@ export function SharedTripView({
       {loose.length > 0 ? (
         <SharedEntryGroup title="Not assigned" entries={loose} bags={bags} unit={unit} />
       ) : null}
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <Backpack className="size-4" aria-hidden="true" />
+            </span>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-foreground">Made with Pack Mate</span>
+              <span className="text-xs text-muted-foreground">
+                Build your own packing list for free.
+              </span>
+            </div>
+          </div>
+          <Button asChild>
+            <Link href="/sign-in">Create your own list</Link>
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

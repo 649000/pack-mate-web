@@ -61,7 +61,9 @@ describe("ItemsView", () => {
     vi.mocked(data.listItems).mockResolvedValue([item]);
     render(<ItemsView />);
     expect(await screen.findByText("Passport")).toBeInTheDocument();
-    expect(screen.getByText(/default quantity: 2/i)).toBeInTheDocument();
+    expect(screen.getByText("Default quantity")).toBeInTheDocument();
+    const row = screen.getByText("Passport").closest("tr");
+    expect(within(row as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
   it("shows an item's description, link, image and weight", async () => {

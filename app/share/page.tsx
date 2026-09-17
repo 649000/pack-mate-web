@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SharedTripPage } from "@/components/share/shared-trip-page";
 
 export const metadata: Metadata = {
@@ -10,11 +11,7 @@ export const metadata: Metadata = {
 
 export default function SharePage() {
   return (
-    <Suspense
-      fallback={
-        <p className="py-10 text-center text-sm text-muted-foreground">Loading shared list...</p>
-      }
-    >
+    <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
       <SharedTripPage />
     </Suspense>
   );

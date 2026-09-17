@@ -1,9 +1,20 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { ListSearch, ListSearchEmpty } from "@/components/list-search";
+import { Columns3, Package, Pencil, Plus, SearchX, Tags, Trash2 } from "lucide-react";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { EmptyState } from "@/components/empty-state";
+import { RecordAction } from "@/components/record-action";
+import { ListSearchToolbar } from "@/components/list-search";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,17 +22,13 @@ import {
   CardDescription,
   CardHeader,
   CardHeading,
-  CardTable,
   CardTitle,
+  CardToolbar,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataGrid } from "@/components/ui/data-grid";
+import { DataGridTable } from "@/components/ui/data-grid-table";
+import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
+import { DataGridColumnVisibility } from "@/components/ui/data-grid-column-visibility";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +39,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -56,6 +64,23 @@ import {
 } from "@/lib/validation";
 import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
 
+function ItemThumbnail({ item }: { item: ReusableItem }) {
+  if (item.image_url) {
+    return (
+      <img
+        src={item.image_url}
+        alt={item.name}
+        className="size-10 shrink-0 rounded-md border object-cover"
+      />
+    );
+  }
+  return (
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
+      <Package className="size-4" aria-hidden="true" />
+    </span>
+  );
+}
+
 export function ItemsView() {
   const [items, setItems] = useState<ReusableItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +97,8 @@ export function ItemsView() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ReusableItem | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
@@ -105,21 +132,24 @@ export function ItemsView() {
     setEditorOpen(true);
   }
 
-  function openEdit(item: ReusableItem) {
-    setEditing(item);
-    setName(item.name);
-    setQty(String(item.default_qty));
-    setDescription(item.description ?? "");
-    setLink(item.link ?? "");
-    setImageUrl(item.image_url ?? "");
-    setWeight(
-      item.weight_grams === null
-        ? ""
-        : String(Number(fromGrams(item.weight_grams, weightUnit).toFixed(2))),
-    );
-    setCategory(item.category ?? "");
-    setEditorOpen(true);
-  }
+  const openEdit = useCallback(
+    (item: ReusableItem) => {
+      setEditing(item);
+      setName(item.name);
+      setQty(String(item.default_qty));
+      setDescription(item.description ?? "");
+      setLink(item.link ?? "");
+      setImageUrl(item.image_url ?? "");
+      setWeight(
+        item.weight_grams === null
+          ? ""
+          : String(Number(fromGrams(item.weight_grams, weightUnit).toFixed(2))),
+      );
+      setCategory(item.category ?? "");
+      setEditorOpen(true);
+    },
+    [weightUnit],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,6 +194,101 @@ export function ItemsView() {
 
   const visibleItems = filterEntriesByCategory(filterByName(items, query), categoryFilter);
 
+  const columns = useMemo<ColumnDef<ReusableItem>[]>(
+    () => [
+      {
+        id: "name",
+        accessorKey: "name",
+        meta: { headerTitle: "Item" },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Item" />,
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <ItemThumbnail item={item} />
+              <div className="flex min-w-0 flex-col">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{item.name}</span>
+                  <CategoryBadge category={item.category} />
+                </div>
+                {item.description ? (
+                  <span className="truncate text-xs text-muted-foreground">{item.description}</span>
+                ) : null}
+                {item.link ? (
+                  <a
+                    href={item.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate text-xs text-primary underline"
+                  >
+                    {item.link}
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "default_qty",
+        accessorKey: "default_qty",
+        meta: {
+          headerTitle: "Default quantity",
+          headerClassName: "hidden sm:table-cell",
+          cellClassName: "hidden sm:table-cell",
+        },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Default quantity" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.default_qty}</span>
+        ),
+      },
+      {
+        id: "weight_grams",
+        accessorKey: "weight_grams",
+        meta: {
+          headerTitle: "Weight",
+          headerClassName: "hidden sm:table-cell",
+          cellClassName: "hidden sm:table-cell",
+        },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Weight" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.weight_grams === null
+              ? "—"
+              : formatWeight(row.original.weight_grams, weightUnit)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        enableSorting: false,
+        enableHiding: false,
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-1">
+            <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(row.original)} />
+            <RecordAction
+              icon={Trash2}
+              label="Delete"
+              onClick={() => setPendingDelete(row.original)}
+            />
+          </div>
+        ),
+      },
+    ],
+    [openEdit, weightUnit],
+  );
+
+  const table = useReactTable({
+    data: visibleItems,
+    columns,
+    state: { sorting, columnVisibility },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -171,7 +296,10 @@ export function ItemsView() {
         description="Reusable things you bring on trips."
         breadcrumb={[{ label: "Library" }, { label: "Items" }]}
       >
-        <Button onClick={openCreate}>Add item</Button>
+        <Button onClick={openCreate}>
+          <Plus aria-hidden="true" />
+          Add item
+        </Button>
       </PageHeader>
 
       <Card>
@@ -182,16 +310,29 @@ export function ItemsView() {
               {items.length} {items.length === 1 ? "item" : "items"}
             </CardDescription>
           </CardHeading>
+          {!loading && items.length > 0 ? (
+            <CardToolbar>
+              <ListSearchToolbar
+                id="item-search"
+                label="Search items"
+                value={query}
+                onChange={setQuery}
+                placeholder="Search items"
+              />
+              <DataGridColumnVisibility
+                table={table}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Columns3 aria-hidden="true" />
+                    Columns
+                  </Button>
+                }
+              />
+            </CardToolbar>
+          ) : null}
         </CardHeader>
         {!loading && items.length > 0 ? (
-          <div className="flex flex-col gap-3 px-4 pb-3">
-            <ListSearch
-              id="item-search"
-              label="Search items"
-              value={query}
-              onChange={setQuery}
-              placeholder="e.g. passport"
-            />
+          <div className="px-4 pb-3">
             <CategoryFilterChips
               entries={items}
               value={categoryFilter}
@@ -200,89 +341,45 @@ export function ItemsView() {
             />
           </div>
         ) : null}
-        <CardTable>
-          {loading ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">Loading...</div>
-          ) : items.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
-              No items yet. Add your first one.
-            </div>
-          ) : visibleItems.length === 0 ? (
-            query.trim() ? (
-              <ListSearchEmpty noun="items" query={query} />
-            ) : (
-              <div className="p-10 text-center text-sm text-muted-foreground">
-                No items in this category.
-              </div>
-            )
+        {loading ? (
+          <div className="flex flex-col gap-2 p-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <Skeleton key={index} className="h-12 w-full rounded-md" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={Package}
+            title="No items yet"
+            description="Add your first one to reuse it across trips."
+            action={
+              <Button onClick={openCreate}>
+                <Plus aria-hidden="true" />
+                Add your first item
+              </Button>
+            }
+          />
+        ) : visibleItems.length === 0 ? (
+          query.trim() ? (
+            <EmptyState
+              icon={SearchX}
+              title={`No items match “${query}”.`}
+              description="Try a different search term."
+            />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="hidden sm:table-cell">Default quantity</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleItems.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="size-10 shrink-0 rounded-md border object-cover"
-                          />
-                        ) : null}
-                        <div className="flex min-w-0 flex-col">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium">{item.name}</span>
-                            <CategoryBadge category={item.category} />
-                          </div>
-                          {item.description ? (
-                            <span className="truncate text-xs text-muted-foreground">
-                              {item.description}
-                            </span>
-                          ) : null}
-                          {item.link ? (
-                            <a
-                              href={item.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate text-xs text-primary underline"
-                            >
-                              {item.link}
-                            </a>
-                          ) : null}
-                          {item.weight_grams !== null ? (
-                            <span className="text-xs text-muted-foreground">
-                              {formatWeight(item.weight_grams, weightUnit)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      Default quantity: {item.default_qty}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(item)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardTable>
+            <EmptyState
+              icon={Tags}
+              title="No items in this category."
+              description="Choose another category or add an item."
+            />
+          )
+        ) : (
+          <DataGrid table={table} recordCount={visibleItems.length} tableLayout={{ width: "auto" }}>
+            <div className="overflow-x-auto">
+              <DataGridTable />
+            </div>
+          </DataGrid>
+        )}
       </Card>
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
@@ -413,7 +510,7 @@ export function ItemsView() {
 
 export default function ItemsPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading...</p>}>
+    <Suspense fallback={<Skeleton className="h-64 w-full rounded-lg" />}>
       <ItemsView />
     </Suspense>
   );

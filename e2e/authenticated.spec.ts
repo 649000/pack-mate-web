@@ -19,6 +19,20 @@ async function signUp(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/trips$/);
 }
 
+// The library pickers are searchable, so options are chosen by typing rather
+// than selecting from a native control.
+async function pickLibraryOption(page: Page, label: string, name: string): Promise<void> {
+  await page.getByLabel(label).click();
+  await page.getByLabel("Search options").fill(name);
+  await page.getByRole("option", { name }).first().click();
+}
+
+// Adding happens in a dialog with one tab per input mode.
+async function openAddDialog(page: Page, tab: RegExp): Promise<void> {
+  await page.getByRole("button", { name: /add to trip/i }).click();
+  await page.getByRole("tab", { name: tab }).click();
+}
+
 test.describe("authenticated critical path", () => {
   test.skip(!enabled, "Set E2E_AUTH=1 to run authenticated flows against a live backend");
 
@@ -35,6 +49,7 @@ test.describe("authenticated critical path", () => {
     // Open the trip and add a one-off item.
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
+    await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
     await expect(page.getByText("Passport")).toBeVisible();
@@ -142,7 +157,8 @@ test.describe("authenticated critical path", () => {
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
-    await page.getByLabel("Add an item from your library").selectOption({ label: "Passport" });
+    await openAddDialog(page, /library item/i);
+    await pickLibraryOption(page, "Add an item from your library", "Passport");
     await page.getByRole("button", { name: /^add item$/i }).click();
     // The name also appears as an <option> in the library select, so anchor on
     // the entry row's unique field instead of the text.
@@ -183,9 +199,11 @@ test.describe("authenticated critical path", () => {
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
-    await page.getByLabel("Add a bag from your library").selectOption({ label: "Main" });
+    await openAddDialog(page, /library bag/i);
+    await pickLibraryOption(page, "Add a bag from your library", "Main");
     await page.getByRole("button", { name: /^add bag$/i }).click();
-    await page.getByLabel("Add an item from your library").selectOption({ label: "Tent" });
+    await openAddDialog(page, /library item/i);
+    await pickLibraryOption(page, "Add an item from your library", "Tent");
     await page.getByLabel("Destination for library item").selectOption({ label: "Main" });
     await page.getByRole("button", { name: /^add item$/i }).click();
 
@@ -222,10 +240,12 @@ test.describe("authenticated critical path", () => {
     await expect(page).toHaveURL(/\/trip\?id=/);
 
     for (const name of ["Suitcase", "Toiletry"]) {
-      await page.getByLabel("Add a bag from your library").selectOption({ label: name });
+      await openAddDialog(page, /library bag/i);
+      await pickLibraryOption(page, "Add a bag from your library", name);
       await page.getByRole("button", { name: /^add bag$/i }).click();
     }
-    await page.getByLabel("Add an item from your library").selectOption({ label: "Toothbrush" });
+    await openAddDialog(page, /library item/i);
+    await pickLibraryOption(page, "Add an item from your library", "Toothbrush");
     await page.getByLabel("Destination for library item").selectOption({ label: "Toiletry" });
     await page.getByRole("button", { name: /^add item$/i }).click();
 
@@ -237,6 +257,49 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Search items").fill("tooth");
     await expect(page.getByText("1 match")).toBeVisible();
     await expect(page.getByText("Suitcase > Toiletry")).toBeVisible();
+  });
+
+  test("picks a library bag and item by typing on a small screen", async ({ page }) => {
+    await signUp(page);
+
+    // A library item and bag whose names only match on a non-prefix substring.
+    await page.goto("/items");
+    await page.getByRole("button", { name: /add item/i }).click();
+    await page.getByLabel("Name").fill("Travel adapter");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    await page.goto("/bags");
+    await page.getByRole("button", { name: /add bag/i }).click();
+    await page.getByLabel("Name").fill("Main backpack");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    await page.goto("/trips");
+    await page.getByRole("button", { name: /new trip/i }).click();
+    await page.getByLabel("Name").fill("Japan");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await page.getByText("Japan").click();
+    await expect(page).toHaveURL(/\/trip\?id=/);
+
+    // "backpack" and "adapter" are not prefixes of the names, so a match proves
+    // substring search rather than start-of-name matching.
+    await openAddDialog(page, /library bag/i);
+    await pickLibraryOption(page, "Add a bag from your library", "backpack");
+    await page.getByRole("button", { name: /^add bag$/i }).click();
+    await expect(page.getByText("Main backpack").first()).toBeVisible();
+
+    await openAddDialog(page, /library item/i);
+    await pickLibraryOption(page, "Add an item from your library", "adapter");
+    await page.getByRole("button", { name: /^add item$/i }).click();
+    await expect(page.getByLabel("Quantity for Travel adapter")).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
   });
 
   test("shares a trip publicly, reflects changes, and revokes", async ({ page, browser }) => {
@@ -252,7 +315,10 @@ test.describe("authenticated critical path", () => {
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
     // Dev compiles /trip on demand; the URL updates before the route renders.
-    await expect(page.getByLabel("Add a one-off item")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("button", { name: /add to trip/i })).toBeVisible({
+      timeout: 60_000,
+    });
+    await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
     await expect(page.getByText("Passport")).toBeVisible();
