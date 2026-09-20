@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
 // Authenticated flows authenticate through Firebase and the local Supabase stack
@@ -31,6 +32,55 @@ async function pickLibraryOption(page: Page, label: string, name: string): Promi
 async function openAddDialog(page: Page, tab: RegExp): Promise<void> {
   await page.getByRole("button", { name: /add to trip/i }).click();
   await page.getByRole("tab", { name: tab }).click();
+}
+
+async function createItem(page: Page, name: string): Promise<void> {
+  await page.goto("/items");
+  await page.getByRole("button", { name: /add item/i }).click();
+  await page.getByLabel("Name").fill(name);
+  await page.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+}
+
+async function createBag(page: Page, name: string, limit?: string): Promise<void> {
+  await page.goto("/bags");
+  await page.getByRole("button", { name: /add bag/i }).click();
+  await page.getByLabel("Name").fill(name);
+  if (limit) await page.getByLabel(/weight limit/i).fill(limit);
+  await page.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+}
+
+async function createTrip(page: Page, name: string): Promise<void> {
+  await page.goto("/trips");
+  await page.getByRole("button", { name: /new trip/i }).click();
+  await page.getByLabel("Name").fill(name);
+  await page.getByRole("button", { name: /^save$/i }).click();
+  await expect(page.getByRole("dialog")).toBeHidden();
+}
+
+async function openTrip(page: Page, name = "Japan"): Promise<void> {
+  await page.goto("/trips");
+  await page.getByText(name).click();
+  await expect(page).toHaveURL(/\/trip\?id=/);
+}
+
+// Exports the current trip as a PDF and returns the downloaded bytes. The blank
+// sheet is the dialog default, so only match mode needs an extra click.
+async function exportPdf(
+  page: Page,
+  mode: "blank" | "packed" = "blank",
+): Promise<{ bytes: Buffer; filename: string }> {
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: /download pdf/i }).click();
+  if (mode === "packed") {
+    await page.getByRole("radio", { name: /tick packed items/i }).click();
+  }
+  await page.getByRole("button", { name: /^download$/i }).click();
+  const file = await download;
+  const path = await file.path();
+  if (!path) throw new Error("PDF export produced no file");
+  return { bytes: await readFile(path), filename: file.suggestedFilename() };
 }
 
 test.describe("authenticated critical path", () => {
@@ -388,5 +438,272 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText("Daypack")).toBeVisible();
     await page.getByRole("button", { name: /clear/i }).click();
     await expect(page.getByLabel("Search bags")).toHaveValue("");
+  });
+
+  test("items and bags can be created, edited and deleted", async ({ page }) => {
+    await signUp(page);
+
+    // An item can be created, renamed and deleted.
+    await createItem(page, "Passport");
+    await expect(page.getByText("Passport")).toBeVisible();
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByLabel("Name").fill("Passport copy");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Passport copy")).toBeVisible();
+    await page.getByRole("button", { name: /^delete$/i }).click();
+    await page
+      .getByRole("button", { name: /^delete$/i })
+      .last()
+      .click();
+    await expect(page.getByText("Passport copy")).toHaveCount(0);
+
+    // A bag can be created with a limit, renamed and given default contents.
+    await createBag(page, "Main", "5");
+    await expect(page.getByText(/limit 5\.00 kg/i)).toBeVisible();
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByLabel("Name").fill("Main bag");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Main bag")).toBeVisible();
+
+    await createItem(page, "Tent");
+    await page.goto("/bags");
+    await page.getByRole("button", { name: /contents/i }).click();
+    await expect(page.getByText(/no default contents yet/i)).toBeVisible();
+    await page.getByLabel("Item").click();
+    await page.getByLabel("Search options").fill("tent");
+    await page.getByRole("option", { name: "Tent" }).first().click();
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await expect(page.getByText("Tent")).toBeVisible();
+    await page.getByRole("button", { name: /^remove$/i }).click();
+    await expect(page.getByText(/no default contents yet/i)).toBeVisible();
+    await page.getByRole("button", { name: "Close" }).click();
+
+    // The bag can be deleted.
+    await page.getByRole("button", { name: /^delete$/i }).click();
+    await page
+      .getByRole("button", { name: /^delete$/i })
+      .last()
+      .click();
+    await expect(page.getByText("Main bag")).toHaveCount(0);
+  });
+
+  test("trips can be edited and shared links copied, regenerated and revoked", async ({ page }) => {
+    await signUp(page);
+
+    // A trip can be renamed.
+    await createTrip(page, "Japan");
+    await expect(page.getByText("Japan")).toBeVisible();
+    await page.getByRole("button", { name: /^edit$/i }).click();
+    await page.getByLabel("Name").fill("Japan 2026");
+    await page.getByRole("button", { name: /^save$/i }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await expect(page.getByText("Japan 2026")).toBeVisible();
+
+    // Publish a link, then manage it from the shared links surface.
+    await page.getByText("Japan 2026").click();
+    await expect(page).toHaveURL(/\/trip\?id=/);
+    await page.getByRole("button", { name: /^share$/i }).click();
+    await page.getByRole("button", { name: /create link/i }).click();
+    expect(await page.getByLabel("Link").inputValue()).toContain("/share?t=");
+    await page.getByRole("button", { name: /^done$/i }).click();
+
+    await page.goto("/shares");
+    await expect(page.getByText("Japan 2026")).toBeVisible();
+
+    await page.getByRole("button", { name: /^copy$/i }).click();
+    await expect(page.getByText(/link copied/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^regenerate$/i }).click();
+    await expect(page.getByText(/new link created/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /^revoke$/i }).click();
+    await expect(page.getByText("revoked").first()).toBeVisible();
+  });
+
+  test("trip entries can be added, reassigned, packed, reordered and removed", async ({ page }) => {
+    await signUp(page);
+
+    await createItem(page, "Tent");
+    await createBag(page, "Main");
+    await createTrip(page, "Japan");
+    await openTrip(page);
+
+    // Add a library bag, then a library item into it.
+    await openAddDialog(page, /library bag/i);
+    await pickLibraryOption(page, "Add a bag from your library", "Main");
+    await page.getByRole("button", { name: /^add bag$/i }).click();
+    await expect(page.getByRole("region", { name: "Main" })).toBeVisible();
+
+    await openAddDialog(page, /library item/i);
+    await pickLibraryOption(page, "Add an item from your library", "Tent");
+    await page.getByLabel("Destination for library item").selectOption({ label: "Main" });
+    await page.getByRole("button", { name: /^add item$/i }).click();
+    await expect(page.getByLabel("Quantity for Tent")).toBeVisible();
+
+    // Add two one-off items to the unassigned group.
+    for (const name of ["Passport", "Adapter"]) {
+      await openAddDialog(page, /one-off item/i);
+      await page.getByLabel("Add a one-off item").fill(name);
+      await page.getByRole("button", { name: /^add$/i }).click();
+      await expect(page.getByLabel(`Quantity for ${name}`)).toBeVisible();
+    }
+
+    // Reorder the unassigned entries by dragging a row.
+    const loose = page.getByRole("region", { name: "Not assigned" });
+    const labels = () =>
+      loose
+        .getByLabel(/^Quantity for/)
+        .evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")));
+    const orderBefore = await labels();
+    const handles = loose.getByLabel("Reorder");
+    const firstBox = await handles.first().boundingBox();
+    const secondBox = await handles.nth(1).boundingBox();
+    if (!firstBox || !secondBox) throw new Error("Reorder handle not visible");
+    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2, {
+      steps: 10,
+    });
+    await page.mouse.up();
+    await expect.poll(labels).not.toEqual(orderBefore);
+
+    // Change a quantity.
+    const qty = page.getByLabel("Quantity for Passport");
+    await qty.fill("3");
+    await qty.blur();
+    await expect(qty).toHaveValue("3");
+
+    // Mark the entry With Me.
+    const passportRow = qty.locator("..");
+    await passportRow.getByLabel("Location").selectOption("with_me");
+    await expect(page.getByRole("region", { name: "With Me" }).getByText("Passport")).toBeVisible();
+
+    // Pack it.
+    await passportRow.getByRole("checkbox").click();
+    await expect(page.getByRole("checkbox", { name: /mark unpacked/i })).toBeVisible();
+
+    // Remove the other entry.
+    const adapterRow = page.getByLabel("Quantity for Adapter").locator("..");
+    await adapterRow.getByRole("button", { name: /^remove$/i }).click();
+    await expect(page.getByLabel("Quantity for Adapter")).toHaveCount(0);
+  });
+
+  test("exports a trip's packing list as a printable PDF", async ({ page }) => {
+    await signUp(page);
+    await createTrip(page, "Japan");
+    await openTrip(page, "Japan");
+
+    await openAddDialog(page, /one-off item/i);
+    await page.getByLabel("Add a one-off item").fill("Passport");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await expect(page.getByText("Passport")).toBeVisible();
+
+    const { bytes, filename } = await exportPdf(page);
+
+    expect(filename).toMatch(/pack-mate-japan.*\.pdf/i);
+    expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  test("PDF match mode reflects packed state", async ({ page }) => {
+    await signUp(page);
+
+    // A trip with a packed entry: the ticked sheet differs from the blank one.
+    await createTrip(page, "Japan");
+    await openTrip(page, "Japan");
+    await openAddDialog(page, /one-off item/i);
+    await page.getByLabel("Add a one-off item").fill("Passport");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await page.getByRole("checkbox", { name: /mark packed/i }).click();
+
+    const packedTripBlank = await exportPdf(page, "blank");
+    const packedTripMatch = await exportPdf(page, "packed");
+    expect(packedTripMatch.bytes.length).not.toBe(packedTripBlank.bytes.length);
+
+    // A trip with nothing packed: both modes produce the same sheet.
+    await createTrip(page, "Norway");
+    await openTrip(page, "Norway");
+    await openAddDialog(page, /one-off item/i);
+    await page.getByLabel("Add a one-off item").fill("Tent");
+    await page.getByRole("button", { name: /^add$/i }).click();
+
+    const looseBlank = await exportPdf(page, "blank");
+    const looseMatch = await exportPdf(page, "packed");
+    expect(looseMatch.bytes.length).toBe(looseBlank.bytes.length);
+  });
+
+  test("every surface is usable at mobile and desktop widths", async ({ page }) => {
+    await signUp(page);
+
+    // Seed a library and a trip with content so each surface has records.
+    await createItem(page, "Passport");
+    await createBag(page, "Main", "5");
+    await createTrip(page, "Japan");
+    await openTrip(page);
+    await openAddDialog(page, /library bag/i);
+    await pickLibraryOption(page, "Add a bag from your library", "Main");
+    await page.getByRole("button", { name: /^add bag$/i }).click();
+    await openAddDialog(page, /one-off item/i);
+    await page.getByLabel("Add a one-off item").fill("Adapter");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await expect(page.getByText("Adapter")).toBeVisible();
+
+    // Publish a link so the public surface has content too.
+    await page.getByRole("button", { name: /^share$/i }).click();
+    await page.getByRole("button", { name: /create link/i }).click();
+    const shareUrl = await page.getByLabel("Link").inputValue();
+    await page.getByRole("button", { name: /^done$/i }).click();
+    const tripUrl = page.url();
+
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const surfaces: { path: string; assert: () => Promise<unknown> }[] = [
+        {
+          path: "/trips",
+          assert: () => expect(page.getByRole("button", { name: /new trip/i })).toBeVisible(),
+        },
+        {
+          path: "/bags",
+          assert: () => expect(page.getByRole("button", { name: /add bag/i })).toBeVisible(),
+        },
+        {
+          path: "/items",
+          assert: () => expect(page.getByRole("button", { name: /add item/i })).toBeVisible(),
+        },
+        {
+          path: "/shares",
+          assert: () => expect(page.getByRole("heading", { name: /shared links/i })).toBeVisible(),
+        },
+        { path: "/account", assert: () => expect(page.getByText(/personal info/i)).toBeVisible() },
+        {
+          path: tripUrl,
+          assert: () => expect(page.getByRole("button", { name: /add to trip/i })).toBeVisible(),
+        },
+        {
+          path: shareUrl,
+          assert: () =>
+            expect(page.getByRole("link", { name: /create your own list/i })).toBeVisible(),
+        },
+      ];
+
+      for (const surface of surfaces) {
+        await page.goto(surface.path);
+        await surface.assert();
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - window.innerWidth,
+        );
+        expect(overflow, `${surface.path} at ${width}px`).toBeLessThanOrEqual(1);
+      }
+
+      // The PDF export dialog must not overflow either.
+      await page.goto(tripUrl);
+      await page.getByRole("button", { name: /download pdf/i }).click();
+      const dialogOverflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      expect(dialogOverflow, `pdf dialog at ${width}px`).toBeLessThanOrEqual(1);
+      await page.getByRole("button", { name: /cancel/i }).click();
+    }
   });
 });
