@@ -132,6 +132,8 @@ import {
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
+import { ExportPdfDialog } from "@/components/packing/export-pdf-dialog";
+import { buildTripPdfViewModel } from "@/lib/pdf";
 import {
   buildShareUrl,
   SHARE_EXPIRY_OPTIONS,
@@ -406,6 +408,7 @@ export function TripView() {
   const [shareUrl, setShareUrl] = useState("");
   const [shareExpiry, setShareExpiry] = useState<ShareExpiry>("never");
   const [shareBusy, setShareBusy] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   function openAdd(mode: "item" | "bag" | "oneoff") {
     setAddMode(mode);
@@ -759,6 +762,9 @@ export function TripView() {
           </Button>
           <Button type="button" size="sm" onClick={openShare}>
             Share
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
+            Download PDF
           </Button>
         </div>
       </PageHeader>
@@ -1190,6 +1196,12 @@ export function TripView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExportPdfDialog
+        open={pdfOpen}
+        onOpenChange={setPdfOpen}
+        buildModel={(mode) => buildTripPdfViewModel({ trip, bags, entries, mode, unit })}
+      />
     </div>
   );
 }
