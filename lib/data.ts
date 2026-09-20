@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { getFirebaseAuth } from "./firebase";
 import type {
   ItemCategory,
+  DestinationFacts,
   ReusableBag,
   ReusableBagItem,
   ReusableItem,
@@ -493,6 +494,20 @@ export async function getSharedTrip(token: string): Promise<SharedTrip | null> {
   const { data, error } = await supabase.rpc("get_shared_trip", { p_token: token });
   if (error) throw new Error(error.message);
   return (data as SharedTrip | null) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Destination facts
+// ---------------------------------------------------------------------------
+
+export async function getDestinationFacts(countryCode: string): Promise<DestinationFacts | null> {
+  const { data, error } = await supabase
+    .from("destination_facts")
+    .select("*")
+    .eq("country_code", countryCode)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as DestinationFacts | null) ?? null;
 }
 
 // ---------------------------------------------------------------------------

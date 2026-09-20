@@ -1,5 +1,10 @@
-import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getDestinationFacts = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/data", () => ({ getDestinationFacts }));
+
 import { SharedTripView } from "./shared-trip-view";
 import type { SharedTripBag, SharedTripEntry } from "@/lib/types";
 
@@ -37,6 +42,11 @@ const trip = {
   start_date: "2026-03-01",
   end_date: "2026-03-10",
 };
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  getDestinationFacts.mockResolvedValue(null);
+});
 
 describe("SharedTripView", () => {
   it("renders a populated list grouped by bag, With Me and unassigned", () => {
@@ -156,5 +166,34 @@ describe("SharedTripView", () => {
     expect(within(card).getByText("Uncategorised")).toBeInTheDocument();
     expect(within(card).getByText("0.00 kg")).toBeInTheDocument();
     expect(within(card).getByText(/grey bars include items with no weight/i)).toBeInTheDocument();
+  });
+
+  it("shows destination facts for the trip's country", async () => {
+    getDestinationFacts.mockResolvedValue({
+      country_code: "JP",
+      currency_code: "JPY",
+      calling_code: "+81",
+      plug_types: ["A", "B"],
+      voltage: "100",
+      frequency: "50/60",
+      timezones: ["Asia/Tokyo"],
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+
+    render(<SharedTripView trip={trip} bags={[]} entries={[]} />);
+
+    expect(await screen.findByText("Destination info")).toBeInTheDocument();
+    expect(screen.getByAltText("Type A plug")).toBeInTheDocument();
+    expect(screen.getByText("JPY ¥")).toBeInTheDocument();
+  });
+
+  it("does not break the shared list when destination facts fail", async () => {
+    getDestinationFacts.mockRejectedValue(new Error("offline"));
+
+    render(<SharedTripView trip={trip} bags={[]} entries={[]} />);
+
+    expect(screen.getByRole("heading", { name: "Japan" })).toBeInTheDocument();
+    await waitFor(() => expect(getDestinationFacts).toHaveBeenCalled());
+    expect(screen.queryByText("Destination info")).not.toBeInTheDocument();
   });
 });

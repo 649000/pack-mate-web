@@ -31,6 +31,7 @@ vi.mock("@/lib/data", () => ({
   createShareLink: vi.fn(),
   getActiveShareLink: vi.fn(),
   regenerateShareLink: vi.fn(),
+  getDestinationFacts: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -106,6 +107,7 @@ beforeEach(() => {
   vi.mocked(data.listBags).mockResolvedValue([]);
   vi.mocked(data.listItems).mockResolvedValue([]);
   vi.mocked(data.getProfile).mockResolvedValue(null);
+  vi.mocked(data.getDestinationFacts).mockResolvedValue(null);
 });
 
 function bagCard(name: string): HTMLElement {
@@ -145,6 +147,39 @@ describe("TripView", () => {
 
     expect(await screen.findByText("Kyoto, Japan")).toBeInTheDocument();
     expect(screen.queryByText("JP")).not.toBeInTheDocument();
+  });
+
+  it("shows destination facts for the trip's country", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    vi.mocked(data.getDestinationFacts).mockResolvedValue({
+      country_code: "JP",
+      currency_code: "JPY",
+      calling_code: "+81",
+      plug_types: ["A", "B"],
+      voltage: "100",
+      frequency: "50/60",
+      timezones: ["Asia/Tokyo"],
+      updated_at: "2026-01-01T00:00:00Z",
+    });
+    render(<TripView />);
+
+    expect(await screen.findByText("Destination info")).toBeInTheDocument();
+    expect(screen.getByAltText("Type A plug")).toBeInTheDocument();
+    expect(screen.getByText("JPY ¥")).toBeInTheDocument();
+    expect(screen.getByText("+81")).toBeInTheDocument();
+  });
+
+  it("keeps the packing list usable when destination facts fail to load", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([entry({ id: "e1", name: "Passport" })]);
+    vi.mocked(data.getDestinationFacts).mockRejectedValue(new Error("offline"));
+    render(<TripView />);
+
+    expect(await screen.findByText("Passport")).toBeInTheDocument();
+    expect(screen.queryByText("Destination info")).not.toBeInTheDocument();
   });
 
   it("marks an entry packed", async () => {

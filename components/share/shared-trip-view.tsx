@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/empty-state";
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { TripCountdown } from "@/components/packing/trip-countdown";
+import { DestinationInfo } from "@/components/packing/destination-info";
 import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import {
   buildBagTree,
@@ -232,6 +233,12 @@ export function SharedTripView({
           <Progress value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100} />
         </CardContent>
       </Card>
+
+      <DestinationInfo
+        countryCode={trip.country_code}
+        destination={trip.destination}
+        startDate={trip.start_date}
+      />
 
       {categoryBreakdown.length > 0 ? (
         <Card>

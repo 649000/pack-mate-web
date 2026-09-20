@@ -137,6 +137,7 @@ import { CategoryBadge } from "@/components/packing/category-badge";
 import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
 import { PackedFilterChips } from "@/components/packing/packed-filter-chips";
 import { TripCountdown } from "@/components/packing/trip-countdown";
+import { DestinationInfo } from "@/components/packing/destination-info";
 import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import { ExportPdfDialog } from "@/components/packing/export-pdf-dialog";
 import { buildTripPdfViewModel } from "@/lib/pdf";
@@ -805,6 +806,12 @@ export function TripView() {
           </div>
         </CardContent>
       </Card>
+
+      <DestinationInfo
+        countryCode={trip.country_code}
+        destination={trip.destination}
+        startDate={trip.start_date}
+      />
 
       <Card>
         <CardContent className="flex flex-col gap-3 p-4">

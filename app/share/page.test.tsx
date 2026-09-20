@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(searchParams.value),
 }));
 
-vi.mock("@/lib/data", () => ({ getSharedTrip: vi.fn() }));
+vi.mock("@/lib/data", () => ({ getSharedTrip: vi.fn(), getDestinationFacts: vi.fn() }));
 
 import * as data from "@/lib/data";
 import { SharedTripPage } from "@/components/share/shared-trip-page";
@@ -48,6 +48,7 @@ function payload(packed: boolean): SharedTrip {
 beforeEach(() => {
   vi.clearAllMocks();
   searchParams.value = `?t=${TOKEN}`;
+  vi.mocked(data.getDestinationFacts).mockResolvedValue(null);
 });
 
 describe("SharedTripPage", () => {

@@ -60,6 +60,19 @@ export type Trip = {
   created_at: string;
 };
 
+// Read-only reference data keyed by ISO 3166-1 alpha-2 country code. Any field
+// may be absent when the sources have no value for that country.
+export type DestinationFacts = {
+  country_code: string;
+  currency_code: string | null;
+  calling_code: string | null;
+  plug_types: string[];
+  voltage: string | null;
+  frequency: string | null;
+  timezones: string[];
+  updated_at: string;
+};
+
 export type TripBag = {
   id: string;
   trip_id: string;
