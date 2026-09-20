@@ -29,13 +29,7 @@
 - [x] 5.2 Verify `npm run verify` passes, including the bundle check and static export
 - [x] 5.3 Confirm the paid template source remains untracked (`git ls-files reference/` is empty) and only derived code is committed
 
-## 6. Follow-up (deferred)
+## 6. Follow-up
 
-- [ ] 6.1 Replace the landing's template screenshots (`public/screens/*.png`, used in the hero and "How it works") with Pack Mate screenshots once available; verify the landing renders the new images with no broken images
-- [ ] 6.2 Decide the brand colour and apply it to the token base (currently the template default); verify the app shell, pages and landing still render correctly with the new tokens
-- [ ] 6.3 Replace the landing contact form's simulated submit with a real destination, or remove the form; verify a submission reaches the chosen destination
-- [ ] 6.4 Review the landing copy for tone and claims before public launch; verify the final copy is approved
 - [x] 6.5 Add Profile and Preferences pages, or remove those menu items; verify every user-dropdown item navigates somewhere real or is gone (Profile now opens `/account`; Preferences removed)
-- [ ] 6.6 Expand header search beyond navigation destinations (e.g. trips, bags, items); verify a result navigates to the matching record
-- [ ] 6.7 Implement real notifications or remove the notifications sheet; verify no dead UI remains in the header
-- [ ] 6.8 Port the remaining Metronic header widgets (mega menu, chat, apps) or explicitly decide not to; verify no expected header control is missing
+- [x] 6.6 Expand header search beyond navigation destinations (e.g. trips, bags, items); verify a result navigates to the matching record
