@@ -15,10 +15,12 @@ import type {
 import {
   validateBirthday,
   validateCategory,
+  validateCountry,
   validateDateRange,
   validateGender,
   validateName,
   validateOptionalDescription,
+  validateOptionalDestination,
   validateOptionalName,
   validateOptionalUrl,
   validateQty,
@@ -208,30 +210,35 @@ export async function getTrip(id: string): Promise<Trip> {
   return unwrap(data as Trip | null, error);
 }
 
-export async function createTrip(input: {
+export type TripInput = {
   name: string;
+  destination: string | null;
+  countryCode: string;
   startDate: string | null;
   endDate: string | null;
-}): Promise<Trip> {
+};
+
+function validateTrip(input: TripInput) {
   const name = validateName(input.name, "Trip name");
+  const destination = validateOptionalDestination(input.destination);
+  const country_code = validateCountry(input.countryCode);
   const { startDate, endDate } = validateDateRange(input.startDate, input.endDate);
+  return { name, destination, country_code, start_date: startDate, end_date: endDate };
+}
+
+export async function createTrip(input: TripInput): Promise<Trip> {
   const { data, error } = await supabase
     .from("trips")
-    .insert({ name, start_date: startDate, end_date: endDate })
+    .insert(validateTrip(input))
     .select()
     .single();
   return unwrap(data as Trip | null, error);
 }
 
-export async function updateTrip(
-  id: string,
-  input: { name: string; startDate: string | null; endDate: string | null },
-): Promise<Trip> {
-  const name = validateName(input.name, "Trip name");
-  const { startDate, endDate } = validateDateRange(input.startDate, input.endDate);
+export async function updateTrip(id: string, input: TripInput): Promise<Trip> {
   const { data, error } = await supabase
     .from("trips")
-    .update({ name, start_date: startDate, end_date: endDate })
+    .update(validateTrip(input))
     .eq("id", id)
     .select()
     .single();

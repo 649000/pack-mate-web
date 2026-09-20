@@ -53,6 +53,8 @@ export type Trip = {
   id: string;
   user_id: string;
   name: string;
+  destination: string | null;
+  country_code: string;
   start_date: string | null;
   end_date: string | null;
   created_at: string;
@@ -129,7 +131,13 @@ export type SharedTripEntry = EntryLike & {
 
 export type SharedTrip = {
   v: number;
-  trip: { name: string; start_date: string | null; end_date: string | null };
+  trip: {
+    name: string;
+    destination: string | null;
+    country_code: string;
+    start_date: string | null;
+    end_date: string | null;
+  };
   bags: SharedTripBag[];
   entries: SharedTripEntry[];
 };

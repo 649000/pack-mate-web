@@ -23,11 +23,13 @@ vi.mock("./firebase", () => ({ getFirebaseAuth: () => authState }));
 import {
   createBag,
   createItem,
+  createTrip,
   getProfile,
   setBagParent,
   updateBag,
   updateEntry,
   updateItem,
+  updateTrip,
   upsertProfile,
 } from "./data";
 import type { ItemCategory, TripBag } from "./types";
@@ -348,5 +350,84 @@ describe("updateEntry", () => {
       /valid category/i,
     );
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("createTrip and updateTrip", () => {
+  it("validates and writes the destination and country", async () => {
+    const row = { id: "t1", name: "Kyoto", destination: "Kyoto", country_code: "JP" };
+    mocks.single.mockResolvedValue({ data: row, error: null });
+
+    await expect(
+      createTrip({
+        name: "  Kyoto  ",
+        destination: "  Kyoto  ",
+        countryCode: "jp",
+        startDate: null,
+        endDate: null,
+      }),
+    ).resolves.toEqual(row);
+
+    expect(mocks.from).toHaveBeenCalledWith("trips");
+    expect(mocks.insert).toHaveBeenCalledWith({
+      name: "Kyoto",
+      destination: "Kyoto",
+      country_code: "JP",
+      start_date: null,
+      end_date: null,
+    });
+  });
+
+  it("allows a trip without a destination", async () => {
+    mocks.single.mockResolvedValue({ data: { id: "t1" }, error: null });
+
+    await createTrip({
+      name: "France",
+      destination: "   ",
+      countryCode: "FR",
+      startDate: null,
+      endDate: null,
+    });
+
+    expect(mocks.insert).toHaveBeenCalledWith({
+      name: "France",
+      destination: null,
+      country_code: "FR",
+      start_date: null,
+      end_date: null,
+    });
+  });
+
+  it("rejects an unknown country before writing", async () => {
+    await expect(
+      createTrip({
+        name: "Nowhere",
+        destination: null,
+        countryCode: "ZZ",
+        startDate: null,
+        endDate: null,
+      }),
+    ).rejects.toThrow(/valid country/i);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
+  it("updates a trip with its destination and country", async () => {
+    mocks.single.mockResolvedValue({ data: { id: "t1" }, error: null });
+
+    await updateTrip("t1", {
+      name: "Iceland",
+      destination: "Reykjavik",
+      countryCode: "IS",
+      startDate: null,
+      endDate: null,
+    });
+
+    expect(mocks.update).toHaveBeenCalledWith({
+      name: "Iceland",
+      destination: "Reykjavik",
+      country_code: "IS",
+      start_date: null,
+      end_date: null,
+    });
   });
 });

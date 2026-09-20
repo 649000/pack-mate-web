@@ -92,8 +92,14 @@ describe("createShareLink", () => {
 describe("getSharedTrip", () => {
   it("returns the projection for a token", async () => {
     const payload = {
-      v: 1,
-      trip: { name: "Japan", start_date: null, end_date: null },
+      v: 2,
+      trip: {
+        name: "Japan",
+        destination: null,
+        country_code: "JP",
+        start_date: null,
+        end_date: null,
+      },
       bags: [],
       entries: [],
     };

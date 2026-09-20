@@ -11,6 +11,7 @@ import { ExportPdfDialog, type PdfExporter } from "./export-pdf-dialog";
 
 const base: PdfViewModel = {
   tripName: "Iceland 2026",
+  location: null,
   dates: "2026-06-03 to 2026-06-12",
   packed: 1,
   total: 2,

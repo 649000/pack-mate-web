@@ -38,8 +38,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input, inputVariants } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -51,6 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { COUNTRIES, formatDestination } from "@/lib/countries";
 import { createTrip, deleteTrip, listTrips, updateTrip } from "@/lib/data";
 import { filterByName } from "@/lib/packing";
 import type { Trip } from "@/lib/types";
@@ -68,6 +70,8 @@ export function TripsView() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Trip | null>(null);
   const [name, setName] = useState("");
+  const [destination, setDestination] = useState("");
+  const [countryCode, setCountryCode] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
@@ -97,6 +101,8 @@ export function TripsView() {
   function openCreate() {
     setEditing(null);
     setName("");
+    setDestination("");
+    setCountryCode("");
     setStartDate("");
     setEndDate("");
     setEditorOpen(true);
@@ -105,6 +111,8 @@ export function TripsView() {
   const openEdit = useCallback((trip: Trip) => {
     setEditing(trip);
     setName(trip.name);
+    setDestination(trip.destination ?? "");
+    setCountryCode(trip.country_code);
     setStartDate(trip.start_date ?? "");
     setEndDate(trip.end_date ?? "");
     setEditorOpen(true);
@@ -112,10 +120,16 @@ export function TripsView() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!countryCode) {
+      toast.error("Select a country");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         name: validateName(name, "Trip name"),
+        destination: destination.trim() || null,
+        countryCode,
         startDate: startDate || null,
         endDate: endDate || null,
       };
@@ -165,6 +179,21 @@ export function TripsView() {
               {row.original.name}
             </Link>
           </div>
+        ),
+      },
+      {
+        id: "destination",
+        accessorFn: (trip) => formatDestination(trip.destination, trip.country_code) ?? "",
+        meta: {
+          headerTitle: "Destination",
+          headerClassName: "hidden sm:table-cell",
+          cellClassName: "hidden sm:table-cell",
+        },
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Destination" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {formatDestination(row.original.destination, row.original.country_code)}
+          </span>
         ),
       },
       {
@@ -290,7 +319,9 @@ export function TripsView() {
           <form onSubmit={handleSubmit}>
             <DialogHeader>
               <DialogTitle>{editing ? "Edit trip" : "New trip"}</DialogTitle>
-              <DialogDescription>Give your trip a name and optional dates.</DialogDescription>
+              <DialogDescription>
+                Give your trip a name, a country and optional dates.
+              </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
               <div className="flex flex-col gap-1.5">
@@ -300,6 +331,31 @@ export function TripsView() {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="trip-country">Country</Label>
+                <select
+                  id="trip-country"
+                  value={countryCode}
+                  onChange={(event) => setCountryCode(event.target.value)}
+                  className={cn(inputVariants({ variant: "md" }), "pr-8")}
+                >
+                  <option value="">Select a country</option>
+                  {COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="trip-destination">Destination</Label>
+                <Input
+                  id="trip-destination"
+                  value={destination}
+                  onChange={(event) => setDestination(event.target.value)}
+                  placeholder="City or place (optional)"
                 />
               </div>
               <div className="flex gap-3">

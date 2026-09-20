@@ -82,7 +82,7 @@ describe("RLS and copy-on-add (integration)", () => {
 
     const trip = await rest("trips", tokenA, {
       method: "POST",
-      body: JSON.stringify({ name: "Japan" }),
+      body: JSON.stringify({ name: "Japan", country_code: "JP" }),
     });
     const tripId = (trip.body as { id: string }[])[0].id;
 
@@ -116,7 +116,7 @@ describe("RLS and copy-on-add (integration)", () => {
 
     const trip = await rest("trips", tokenA, {
       method: "POST",
-      body: JSON.stringify({ name: "Cascade" }),
+      body: JSON.stringify({ name: "Cascade", country_code: "JP" }),
     });
     const tripId = (trip.body as { id: string }[])[0].id;
 
@@ -224,7 +224,7 @@ describe("RLS and copy-on-add (integration)", () => {
 
     const trip = await rest("trips", tokenA, {
       method: "POST",
-      body: JSON.stringify({ name: "Details" }),
+      body: JSON.stringify({ name: "Details", country_code: "JP" }),
     });
     const tripId = (trip.body as { id: string }[])[0].id;
 

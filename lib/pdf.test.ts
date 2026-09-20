@@ -33,14 +33,26 @@ function bag(partial: Partial<TripBag> & { id: string }): TripBag {
   };
 }
 
-const trip = { name: "Iceland 2026", start_date: "2026-06-03", end_date: "2026-06-12" };
+const trip = {
+  name: "Iceland 2026",
+  destination: "Reykjavik",
+  country_code: "IS",
+  start_date: "2026-06-03",
+  end_date: "2026-06-12",
+};
 
 function build(overrides: {
   bags?: TripBag[];
   entries?: TripEntry[];
   mode?: "blank" | "packed";
   unit?: "kg" | "lb";
-  trip?: { name: string; start_date: string | null; end_date: string | null };
+  trip?: {
+    name: string;
+    destination: string | null;
+    country_code: string;
+    start_date: string | null;
+    end_date: string | null;
+  };
 }): PdfViewModel {
   return buildTripPdfViewModel({
     trip: overrides.trip ?? trip,
@@ -117,10 +129,43 @@ describe("buildTripPdfViewModel grouping and nesting", () => {
 
   it("formats trip dates", () => {
     expect(build({}).dates).toBe("2026-06-03 to 2026-06-12");
-    expect(build({ trip: { name: "X", start_date: "2026-06-03", end_date: null } }).dates).toBe(
-      "2026-06-03",
-    );
-    expect(build({ trip: { name: "X", start_date: null, end_date: null } }).dates).toBeNull();
+    expect(
+      build({
+        trip: {
+          name: "X",
+          destination: null,
+          country_code: "IS",
+          start_date: "2026-06-03",
+          end_date: null,
+        },
+      }).dates,
+    ).toBe("2026-06-03");
+    expect(
+      build({
+        trip: {
+          name: "X",
+          destination: null,
+          country_code: "IS",
+          start_date: null,
+          end_date: null,
+        },
+      }).dates,
+    ).toBeNull();
+  });
+
+  it("formats the trip location from its destination and country", () => {
+    expect(build({}).location).toBe("Reykjavik, Iceland");
+    expect(
+      build({
+        trip: {
+          name: "X",
+          destination: null,
+          country_code: "IS",
+          start_date: null,
+          end_date: null,
+        },
+      }).location,
+    ).toBe("Iceland");
   });
 });
 

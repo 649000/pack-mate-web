@@ -10,11 +10,13 @@ import {
   parseQty,
   validateBirthday,
   validateCategory,
+  validateCountry,
   validateDateRange,
   validateEmail,
   validateGender,
   validateName,
   validateOptionalDescription,
+  validateOptionalDestination,
   validateOptionalName,
   validateOptionalUrl,
   validatePassword,
@@ -289,6 +291,40 @@ describe("ITEM_CATEGORIES", () => {
     for (const group of groups) {
       expect([...group].sort()).toEqual([...ITEM_CATEGORIES].sort());
     }
+  });
+});
+
+describe("validateCountry", () => {
+  it("accepts a known code, normalising case and whitespace", () => {
+    expect(validateCountry("jp")).toBe("JP");
+    expect(validateCountry("  JP  ")).toBe("JP");
+  });
+
+  it("rejects a missing country", () => {
+    expect(() => validateCountry("")).toThrow("Country is required");
+    expect(() => validateCountry(null)).toThrow("Country is required");
+  });
+
+  it("rejects an unknown code", () => {
+    expect(() => validateCountry("ZZ")).toThrow(/valid country/i);
+  });
+});
+
+describe("validateOptionalDestination", () => {
+  it("trims and returns a destination", () => {
+    expect(validateOptionalDestination("  Kyoto  ")).toBe("Kyoto");
+  });
+
+  it("treats a blank destination as absent", () => {
+    expect(validateOptionalDestination("   ")).toBeNull();
+    expect(validateOptionalDestination(null)).toBeNull();
+  });
+
+  it("rejects a destination over the maximum length", () => {
+    expect(validateOptionalDestination("a".repeat(MAX_NAME_LENGTH))).toHaveLength(MAX_NAME_LENGTH);
+    expect(() => validateOptionalDestination("a".repeat(MAX_NAME_LENGTH + 1))).toThrow(
+      ValidationError,
+    );
   });
 });
 

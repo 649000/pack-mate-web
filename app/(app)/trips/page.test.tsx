@@ -26,6 +26,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+import { toast } from "sonner";
 import * as data from "@/lib/data";
 import { TripsView } from "./page";
 
@@ -33,6 +34,8 @@ const trip: Trip = {
   id: "t1",
   user_id: "u1",
   name: "Japan",
+  destination: "Kyoto",
+  country_code: "JP",
   start_date: "2026-03-01",
   end_date: "2026-03-10",
   created_at: "2026-01-01T00:00:00Z",
@@ -66,15 +69,42 @@ describe("TripsView", () => {
 
     await user.click(screen.getByRole("button", { name: /new trip/i }));
     await user.type(await screen.findByLabelText("Name"), "Japan");
+    await user.selectOptions(screen.getByLabelText("Country"), "JP");
+    await user.type(screen.getByLabelText("Destination"), "Kyoto");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
       expect(data.createTrip).toHaveBeenCalledWith({
         name: "Japan",
+        destination: "Kyoto",
+        countryCode: "JP",
         startDate: null,
         endDate: null,
       }),
     );
+  });
+
+  it("blocks creating a trip without a country", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText(/no trips yet/i);
+
+    await user.click(screen.getByRole("button", { name: /new trip/i }));
+    await user.type(await screen.findByLabelText("Name"), "Nowhere");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(data.createTrip).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Select a country");
+  });
+
+  it("shows the destination and country name, never the raw code", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    expect(screen.getByText("Kyoto, Japan")).toBeInTheDocument();
+    expect(screen.queryByText("JP")).not.toBeInTheDocument();
   });
 
   it("deletes a trip after confirmation", async () => {

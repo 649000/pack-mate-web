@@ -148,6 +148,17 @@ export function filterEntriesByCategory<E extends { category: ItemCategory | nul
   return entries.filter((entry) => entry.category === filter);
 }
 
+export type PackedFilter = "all" | "packed" | "unpacked";
+
+export function filterEntriesByPacked<E extends { is_packed: boolean }>(
+  entries: E[],
+  filter: PackedFilter,
+): E[] {
+  if (filter === "all") return entries;
+  if (filter === "packed") return entries.filter((entry) => entry.is_packed);
+  return entries.filter((entry) => !entry.is_packed);
+}
+
 export function categoriesInUse<E extends { category: ItemCategory | null }>(
   entries: E[],
 ): ItemCategory[] {

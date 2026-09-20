@@ -1,3 +1,4 @@
+import { isCountryCode } from "./countries";
 import type { DisplayWeightUnit, Gender, ItemCategory } from "./types";
 
 export class ValidationError extends Error {
@@ -117,6 +118,29 @@ export function validateDateRange(
     throw new ValidationError("End date cannot be before start date");
   }
   return { startDate, endDate };
+}
+
+export function validateCountry(value: string | null | undefined): string {
+  const trimmed = (value ?? "").trim().toUpperCase();
+  if (trimmed.length === 0) {
+    throw new ValidationError("Country is required");
+  }
+  if (!isCountryCode(trimmed)) {
+    throw new ValidationError("Select a valid country");
+  }
+  return trimmed;
+}
+
+export function validateOptionalDestination(
+  value: string | null | undefined,
+  field = "Destination",
+): string | null {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0) return null;
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    throw new ValidationError(`${field} cannot exceed ${MAX_NAME_LENGTH} characters`);
+  }
+  return trimmed;
 }
 
 // ---------------------------------------------------------------------------

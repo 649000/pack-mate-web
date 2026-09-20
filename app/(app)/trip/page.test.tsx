@@ -44,6 +44,8 @@ const trip: Trip = {
   id: "t1",
   user_id: "u1",
   name: "Japan",
+  destination: "Kyoto",
+  country_code: "JP",
   start_date: null,
   end_date: null,
   created_at: "2026-01-01T00:00:00Z",
@@ -133,6 +135,16 @@ describe("TripView", () => {
     expect(screen.getAllByText("With Me").length).toBeGreaterThan(0);
     expect(screen.getByText("Not assigned")).toBeInTheDocument();
     expect(screen.getByText(/0\/3 packed/i)).toBeInTheDocument();
+  });
+
+  it("shows the destination and country name in the header, never the raw code", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    render(<TripView />);
+
+    expect(await screen.findByText("Kyoto, Japan")).toBeInTheDocument();
+    expect(screen.queryByText("JP")).not.toBeInTheDocument();
   });
 
   it("marks an entry packed", async () => {
@@ -551,6 +563,78 @@ describe("TripView", () => {
     expect(await screen.findByText(/no entries in this category/i)).toBeInTheDocument();
   });
 
+  it("shows a departure countdown when the trip has a start date", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue({
+      ...trip,
+      start_date: "2099-01-01",
+      end_date: "2099-01-10",
+    });
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([entry({ id: "e1", name: "Tee" })]);
+    render(<TripView />);
+
+    expect(await screen.findByTestId("trip-countdown")).toBeInTheDocument();
+  });
+
+  it("filters entries by packed state across locations without changing progress", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([bag]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Charger", trip_bag_id: "b1", is_packed: true }),
+      entry({ id: "e2", name: "Tee" }),
+      entry({ id: "e3", is_with_me: true, name: "Passport" }),
+    ]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Charger");
+
+    await user.click(screen.getByRole("button", { name: "To pack" }));
+
+    expect(screen.getByText("Tee")).toBeInTheDocument();
+    expect(screen.getByText("Passport")).toBeInTheDocument();
+    expect(screen.queryByText("Charger")).not.toBeInTheDocument();
+    expect(screen.getByText(/1\/3 packed/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Packed" }));
+
+    expect(screen.getByText("Charger")).toBeInTheDocument();
+    expect(screen.queryByText("Tee")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "All items" }));
+
+    expect(screen.getByText("Tee")).toBeInTheDocument();
+    expect(screen.getByText("Passport")).toBeInTheDocument();
+  });
+
+  it("shows an everything-packed empty state when nothing is left to pack", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Tee", is_packed: true }),
+    ]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Tee");
+
+    await user.click(screen.getByRole("button", { name: "To pack" }));
+
+    expect(await screen.findByText(/everything is packed/i)).toBeInTheDocument();
+    expect(screen.queryByText("Tee")).not.toBeInTheDocument();
+  });
+
+  it("shows a nothing-packed empty state when no entry is packed", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([entry({ id: "e1", name: "Tee" })]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Tee");
+
+    await user.click(screen.getByRole("button", { name: "Packed" }));
+
+    expect(await screen.findByText(/nothing packed yet/i)).toBeInTheDocument();
+  });
+
   it("shows a weight-by-category breakdown over the whole list", async () => {
     vi.mocked(data.getTrip).mockResolvedValue(trip);
     vi.mocked(data.listTripBags).mockResolvedValue([bag]);
@@ -587,6 +671,7 @@ describe("TripView", () => {
     expect(within(card).getByText("0.50 kg")).toBeInTheDocument();
     expect(within(card).getByText("0.03 kg")).toBeInTheDocument();
     expect(within(card).getByText("Uncategorised")).toBeInTheDocument();
-    expect(within(card).getByText(/0\.00 kg \(incomplete\)/)).toBeInTheDocument();
+    expect(within(card).getByText("0.00 kg")).toBeInTheDocument();
+    expect(within(card).getByText(/grey bars include items with no weight/i)).toBeInTheDocument();
   });
 });

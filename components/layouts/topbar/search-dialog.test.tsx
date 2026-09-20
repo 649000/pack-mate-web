@@ -22,6 +22,8 @@ const trip: Trip = {
   id: "t1",
   user_id: "u1",
   name: "Passport trip",
+  destination: null,
+  country_code: "JP",
   start_date: null,
   end_date: null,
   created_at: "2026-01-01T00:00:00Z",

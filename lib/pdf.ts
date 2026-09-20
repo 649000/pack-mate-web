@@ -1,3 +1,4 @@
+import { formatDestination } from "./countries";
 import { buildBagTree, groupEntries, packingProgress, type BagNode } from "./packing";
 import type { DisplayWeightUnit, ItemCategory, TripBag, TripEntry } from "./types";
 import { formatWeight, isOverLimit, sumBagWeight } from "./weight";
@@ -26,6 +27,7 @@ export type PdfBagGroup = {
 
 export type PdfViewModel = {
   tripName: string;
+  location: string | null;
   dates: string | null;
   packed: number;
   total: number;
@@ -35,7 +37,13 @@ export type PdfViewModel = {
   isEmpty: boolean;
 };
 
-type PdfTrip = { name: string; start_date: string | null; end_date: string | null };
+type PdfTrip = {
+  name: string;
+  destination: string | null;
+  country_code: string;
+  start_date: string | null;
+  end_date: string | null;
+};
 
 export function formatTripDates(trip: PdfTrip): string | null {
   if (!trip.start_date && !trip.end_date) return null;
@@ -100,6 +108,7 @@ export function buildTripPdfViewModel({
 
   return {
     tripName: trip.name,
+    location: formatDestination(trip.destination, trip.country_code),
     dates: formatTripDates(trip),
     packed: progress.packed,
     total: progress.total,

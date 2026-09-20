@@ -42,6 +42,7 @@ import {
   Trash2,
   Weight,
 } from "lucide-react";
+import { formatDestination } from "@/lib/countries";
 import { EmptyState } from "@/components/empty-state";
 import { ListSearchToolbar } from "@/components/list-search";
 import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
@@ -98,6 +99,7 @@ import {
   destinationToLocation,
   entryLocationPath,
   filterEntriesByCategory,
+  filterEntriesByPacked,
   groupEntries,
   locationValue,
   packingProgress,
@@ -105,6 +107,7 @@ import {
   type BagNode,
   type CategoryFilter,
   type Destination,
+  type PackedFilter,
 } from "@/lib/packing";
 import type {
   DisplayWeightUnit,
@@ -132,6 +135,9 @@ import {
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
+import { PackedFilterChips } from "@/components/packing/packed-filter-chips";
+import { TripCountdown } from "@/components/packing/trip-countdown";
+import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import { ExportPdfDialog } from "@/components/packing/export-pdf-dialog";
 import { buildTripPdfViewModel } from "@/lib/pdf";
 import {
@@ -394,6 +400,7 @@ export function TripView() {
 
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
+  const [packedFilter, setPackedFilter] = useState<PackedFilter>("all");
   const [unit, setUnit] = useState<DisplayWeightUnit>("kg");
   const [weightOpen, setWeightOpen] = useState(false);
   const [detailEntry, setDetailEntry] = useState<TripEntry | null>(null);
@@ -518,8 +525,9 @@ export function TripView() {
   );
 
   const filteredEntries = useMemo(
-    () => filterEntriesByCategory(searchedEntries, categoryFilter),
-    [searchedEntries, categoryFilter],
+    () =>
+      filterEntriesByPacked(filterEntriesByCategory(searchedEntries, categoryFilter), packedFilter),
+    [searchedEntries, categoryFilter, packedFilter],
   );
 
   const {
@@ -744,6 +752,7 @@ export function TripView() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title={trip.name}
+        description={formatDestination(trip.destination, trip.country_code) ?? undefined}
         breadcrumb={[
           { label: "Packing" },
           { label: "Trips", href: "/trips" },
@@ -784,6 +793,11 @@ export function TripView() {
                 {baggageTotal.complete ? "" : " (incomplete)"}
               </span>
             </div>
+            <TripCountdown
+              startDate={trip.start_date}
+              endDate={trip.end_date}
+              className="text-xs text-muted-foreground"
+            />
             <Progress
               value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
               className="h-1.5 w-full"
@@ -817,6 +831,9 @@ export function TripView() {
               label="Filter entries by category"
             />
           ) : null}
+          {entries.length > 0 ? (
+            <PackedFilterChips value={packedFilter} onChange={setPackedFilter} />
+          ) : null}
         </CardContent>
       </Card>
 
@@ -839,16 +856,42 @@ export function TripView() {
           }
         />
       ) : filteredEntries.length === 0 ? (
-        <EmptyState
-          icon={SearchX}
-          title="No entries in this category."
-          description="Choose another category to see the rest of the list."
-          action={
-            <Button variant="outline" onClick={() => setCategoryFilter("all")}>
-              Show all categories
-            </Button>
-          }
-        />
+        packedFilter !== "all" ? (
+          packedFilter === "unpacked" ? (
+            <EmptyState
+              icon={PackageCheck}
+              title="Everything is packed."
+              description="Nothing left to pack for this trip."
+              action={
+                <Button variant="outline" onClick={() => setPackedFilter("all")}>
+                  Show all items
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={PackageOpen}
+              title="Nothing packed yet."
+              description="No items are marked packed."
+              action={
+                <Button variant="outline" onClick={() => setPackedFilter("all")}>
+                  Show all items
+                </Button>
+              }
+            />
+          )
+        ) : (
+          <EmptyState
+            icon={SearchX}
+            title="No entries in this category."
+            description="Choose another category to see the rest of the list."
+            action={
+              <Button variant="outline" onClick={() => setCategoryFilter("all")}>
+                Show all categories
+              </Button>
+            }
+          />
+        )
       ) : (
         <div className="flex flex-col gap-5">
           {search.trim() ? (
@@ -905,25 +948,8 @@ export function TripView() {
             />
           </button>
           {weightOpen ? (
-            <CardContent className="flex flex-col gap-2 border-t border-border pt-4">
-              {categoryBreakdown.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No weights yet.</p>
-              ) : (
-                categoryBreakdown.map((row) => (
-                  <div
-                    key={row.category ?? "uncategorised"}
-                    className="flex items-center justify-between gap-2 text-sm"
-                  >
-                    <span>
-                      {row.category === null ? "Uncategorised" : ITEM_CATEGORY_LABELS[row.category]}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {formatWeight(row.grams, unit)}
-                      {row.complete ? "" : " (incomplete)"}
-                    </span>
-                  </div>
-                ))
-              )}
+            <CardContent className="border-t border-border pt-4">
+              <WeightByCategoryChart rows={categoryBreakdown} unit={unit} />
             </CardContent>
           ) : null}
         </Card>

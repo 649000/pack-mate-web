@@ -114,6 +114,7 @@ export function TripPdfDocument({ model }: { model: PdfViewModel }) {
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.title}>{model.tripName}</Text>
+          {model.location ? <Text style={styles.subtitle}>{model.location}</Text> : null}
           {model.dates ? <Text style={styles.subtitle}>{model.dates}</Text> : null}
           <Text style={styles.progress}>
             {model.packed} of {model.total} packed

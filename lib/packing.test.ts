@@ -10,6 +10,7 @@ import {
   entryLocationPath,
   filterByName,
   filterEntriesByCategory,
+  filterEntriesByPacked,
   groupEntries,
   hasUncategorised,
   locationValue,
@@ -268,6 +269,27 @@ describe("filterEntriesByCategory", () => {
 
   it("returns nothing when no entry matches", () => {
     expect(filterEntriesByCategory(entries, "pets")).toEqual([]);
+  });
+});
+
+describe("filterEntriesByPacked", () => {
+  const entries = [
+    entry({ id: "a", is_packed: true }),
+    entry({ id: "b" }),
+    entry({ id: "c", is_packed: true }),
+    entry({ id: "d" }),
+  ];
+
+  it("returns everything for the all filter", () => {
+    expect(filterEntriesByPacked(entries, "all")).toEqual(entries);
+  });
+
+  it("returns only packed entries", () => {
+    expect(filterEntriesByPacked(entries, "packed").map((e) => e.id)).toEqual(["a", "c"]);
+  });
+
+  it("returns only unpacked entries", () => {
+    expect(filterEntriesByPacked(entries, "unpacked").map((e) => e.id)).toEqual(["b", "d"]);
   });
 });
 

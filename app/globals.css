@@ -24,6 +24,11 @@
   --input: var(--color-zinc-200);
   --ring: var(--color-zinc-400);
   --radius: 0.5rem;
+  --chart-1: var(--color-blue-500);
+  --chart-2: var(--color-green-500);
+  --chart-3: var(--color-yellow-500);
+  --chart-4: var(--color-red-500);
+  --chart-5: var(--color-purple-500);
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);
@@ -51,6 +56,11 @@
   --border: var(--color-zinc-800);
   --input: var(--color-zinc-800);
   --ring: var(--color-zinc-600);
+  --chart-1: var(--color-blue-500);
+  --chart-2: var(--color-green-500);
+  --chart-3: var(--color-yellow-500);
+  --chart-4: var(--color-red-500);
+  --chart-5: var(--color-purple-500);
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);

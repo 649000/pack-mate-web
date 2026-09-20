@@ -68,7 +68,7 @@ describe("name length and weight ceiling constraints (integration)", () => {
   async function createTrip(name = "Limits trip"): Promise<string> {
     const trip = await rest("trips", token, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, country_code: "JP" }),
     });
     expect(trip.status).toBe(201);
     return (trip.body as { id: string }[])[0].id;

@@ -13,6 +13,8 @@ import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/empty-state";
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
+import { TripCountdown } from "@/components/packing/trip-countdown";
+import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import {
   buildBagTree,
   entryLocationPath,
@@ -27,7 +29,7 @@ import {
   weightByCategory,
   type WeightTotal,
 } from "@/lib/weight";
-import { ITEM_CATEGORY_LABELS } from "@/lib/validation";
+import { formatDestination } from "@/lib/countries";
 import { cn } from "@/lib/utils";
 import type { DisplayWeightUnit, SharedTrip, SharedTripBag, SharedTripEntry } from "@/lib/types";
 
@@ -174,6 +176,7 @@ export function SharedTripView({
   const categoryBreakdown = weightByCategory(entries);
   const bagTree = buildBagTree(bags);
   const dates = formatDates(trip);
+  const destination = formatDestination(trip.destination, trip.country_code);
 
   function renderBagTree(nodes: BagNode<SharedTripBag>[], depth: number) {
     return nodes.map((node) => (
@@ -203,7 +206,13 @@ export function SharedTripView({
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-1">
         <h1 className="text-xl leading-none font-medium text-foreground">{trip.name}</h1>
+        {destination ? <p className="text-sm text-muted-foreground">{destination}</p> : null}
         {dates ? <p className="text-sm text-muted-foreground">{dates}</p> : null}
+        <TripCountdown
+          startDate={trip.start_date}
+          endDate={trip.end_date}
+          className="text-sm text-muted-foreground"
+        />
       </div>
 
       <Card>
@@ -232,21 +241,8 @@ export function SharedTripView({
               Whole list, including With Me and unassigned items. Separate from the baggage total.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {categoryBreakdown.map((row) => (
-              <div
-                key={row.category ?? "uncategorised"}
-                className="flex items-center justify-between gap-2 text-sm"
-              >
-                <span>
-                  {row.category === null ? "Uncategorised" : ITEM_CATEGORY_LABELS[row.category]}
-                </span>
-                <span className="text-muted-foreground">
-                  {formatWeight(row.grams, unit)}
-                  {row.complete ? "" : " (incomplete)"}
-                </span>
-              </div>
-            ))}
+          <CardContent>
+            <WeightByCategoryChart rows={categoryBreakdown} unit={unit} />
           </CardContent>
         </Card>
       ) : null}

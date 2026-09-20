@@ -18,7 +18,13 @@ import { SharedTripPage } from "@/components/share/shared-trip-page";
 function payload(packed: boolean): SharedTrip {
   return {
     v: 2,
-    trip: { name: "Japan", start_date: "2026-03-01", end_date: "2026-03-10" },
+    trip: {
+      name: "Japan",
+      destination: "Kyoto",
+      country_code: "JP",
+      start_date: "2026-03-01",
+      end_date: "2026-03-10",
+    },
     bags: [],
     entries: [
       {

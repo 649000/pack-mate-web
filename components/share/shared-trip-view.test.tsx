@@ -30,7 +30,13 @@ function entry(
   };
 }
 
-const trip = { name: "Japan", start_date: "2026-03-01", end_date: "2026-03-10" };
+const trip = {
+  name: "Japan",
+  destination: "Kyoto",
+  country_code: "JP",
+  start_date: "2026-03-01",
+  end_date: "2026-03-10",
+};
 
 describe("SharedTripView", () => {
   it("renders a populated list grouped by bag, With Me and unassigned", () => {
@@ -44,6 +50,8 @@ describe("SharedTripView", () => {
     render(<SharedTripView trip={trip} bags={bags} entries={entries} />);
 
     expect(screen.getByRole("heading", { name: "Japan" })).toBeInTheDocument();
+    expect(screen.getByText("Kyoto, Japan")).toBeInTheDocument();
+    expect(screen.queryByText("JP")).not.toBeInTheDocument();
     expect(screen.getByText(/2026-03-01 to 2026-03-10/)).toBeInTheDocument();
     expect(screen.getByText("Main")).toBeInTheDocument();
     expect(screen.getByText("With Me")).toBeInTheDocument();
@@ -93,6 +101,24 @@ describe("SharedTripView", () => {
     expect(screen.getByText("Two person")).toBeInTheDocument();
   });
 
+  it("shows the departure countdown when the trip has a start date", () => {
+    render(<SharedTripView trip={trip} bags={[]} entries={[]} />);
+
+    expect(screen.getByTestId("trip-countdown")).toBeInTheDocument();
+  });
+
+  it("omits the countdown when the trip has no start date", () => {
+    render(
+      <SharedTripView
+        trip={{ ...trip, start_date: null, end_date: null }}
+        bags={[]}
+        entries={[]}
+      />,
+    );
+
+    expect(screen.queryByTestId("trip-countdown")).not.toBeInTheDocument();
+  });
+
   it("shows category badges and a weight-by-category breakdown", () => {
     const bags = [bag({ id: "b1", name: "Main" })];
     const entries = [
@@ -128,6 +154,7 @@ describe("SharedTripView", () => {
     expect(within(card).getByText("Documents & Money")).toBeInTheDocument();
     expect(within(card).getByText("0.03 kg")).toBeInTheDocument();
     expect(within(card).getByText("Uncategorised")).toBeInTheDocument();
-    expect(within(card).getByText(/0\.00 kg \(incomplete\)/)).toBeInTheDocument();
+    expect(within(card).getByText("0.00 kg")).toBeInTheDocument();
+    expect(within(card).getByText(/grey bars include items with no weight/i)).toBeInTheDocument();
   });
 });

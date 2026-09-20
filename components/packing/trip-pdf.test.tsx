@@ -36,7 +36,13 @@ function bag(partial: Partial<TripBag> & { id: string }): TripBag {
   };
 }
 
-const trip = { name: "Iceland 2026", start_date: "2026-06-03", end_date: "2026-06-12" };
+const trip = {
+  name: "Iceland 2026",
+  destination: "Reykjavik",
+  country_code: "IS",
+  start_date: "2026-06-03",
+  end_date: "2026-06-12",
+};
 
 async function render(bags: TripBag[], entries: TripEntry[], mode: PdfMode): Promise<Buffer> {
   const model = buildTripPdfViewModel({ trip, bags, entries, mode, unit: "kg" });
