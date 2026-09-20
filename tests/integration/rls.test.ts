@@ -270,4 +270,200 @@ describe("RLS and copy-on-add (integration)", () => {
     });
     expect(badImage.status).toBeGreaterThanOrEqual(400);
   }, 30_000);
+
+  it("duplicates a trip's packing list and rejects another user", async () => {
+    const trip = await rest("trips", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        name: "Japan",
+        country_code: "JP",
+        destination: "Tokyo",
+        start_date: "2026-03-01",
+        end_date: "2026-03-10",
+      }),
+    });
+    const tripId = (trip.body as { id: string }[])[0].id;
+
+    const suitcase = await rest("trip_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Suitcase", position: 0 }),
+    });
+    const suitcaseId = (suitcase.body as { id: string }[])[0].id;
+
+    const toiletry = await rest("trip_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        name: "Toiletry",
+        position: 1,
+        parent_bag_id: suitcaseId,
+      }),
+    });
+    const toiletryId = (toiletry.body as { id: string }[])[0].id;
+
+    await rest("trip_entries", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        trip_bag_id: toiletryId,
+        name: "Toothbrush",
+        qty: 2,
+        is_packed: true,
+        position: 0,
+        description: "Blue",
+        category: "toiletries",
+      }),
+    });
+    await rest("trip_entries", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        name: "Passport",
+        qty: 1,
+        is_with_me: true,
+        is_packed: true,
+        position: 1,
+      }),
+    });
+
+    const dup = await rest("rpc/duplicate_trip", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        p_source_trip_id: tripId,
+        p_name: "Japan 2027",
+        p_country_code: "JP",
+        p_destination: "Osaka",
+        p_start_date: null,
+        p_end_date: null,
+      }),
+    });
+    expect([200, 201]).toContain(dup.status);
+    const newTripId = dup.body as string;
+
+    const newTrip = await rest(`trips?id=eq.${newTripId}&select=*`, tokenA);
+    const newTripRow = (
+      newTrip.body as {
+        name: string;
+        destination: string;
+        country_code: string;
+        start_date: string | null;
+        end_date: string | null;
+      }[]
+    )[0];
+    expect(newTripRow.name).toBe("Japan 2027");
+    expect(newTripRow.destination).toBe("Osaka");
+    expect(newTripRow.country_code).toBe("JP");
+    expect(newTripRow.start_date).toBeNull();
+    expect(newTripRow.end_date).toBeNull();
+
+    const newBags = await rest(
+      `trip_bags?trip_id=eq.${newTripId}&select=id,name,parent_bag_id&order=position.asc`,
+      tokenA,
+    );
+    const bagRows = newBags.body as { id: string; name: string; parent_bag_id: string | null }[];
+    const newSuitcase = bagRows.find((row) => row.name === "Suitcase")!;
+    const newToiletry = bagRows.find((row) => row.name === "Toiletry")!;
+    expect(newToiletry.parent_bag_id).toBe(newSuitcase.id);
+    expect(newToiletry.id).not.toBe(toiletryId);
+
+    const newEntries = await rest(
+      `trip_entries?trip_id=eq.${newTripId}&select=name,qty,is_packed,is_with_me,trip_bag_id,description,category&order=position.asc`,
+      tokenA,
+    );
+    const entryRows = newEntries.body as {
+      name: string;
+      qty: number;
+      is_packed: boolean;
+      is_with_me: boolean;
+      trip_bag_id: string | null;
+      description: string | null;
+      category: string | null;
+    }[];
+    const toothbrush = entryRows.find((row) => row.name === "Toothbrush")!;
+    expect(toothbrush.is_packed).toBe(false);
+    expect(toothbrush.qty).toBe(2);
+    expect(toothbrush.description).toBe("Blue");
+    expect(toothbrush.category).toBe("toiletries");
+    expect(toothbrush.trip_bag_id).toBe(newToiletry.id);
+    const passport = entryRows.find((row) => row.name === "Passport")!;
+    expect(passport.is_packed).toBe(false);
+    expect(passport.is_with_me).toBe(true);
+
+    // The source trip is untouched.
+    const sourceEntries = await rest(`trip_entries?trip_id=eq.${tripId}&select=is_packed`, tokenA);
+    expect((sourceEntries.body as { is_packed: boolean }[]).every((row) => row.is_packed)).toBe(
+      true,
+    );
+
+    // A second user can neither duplicate the trip nor read the copy.
+    const bDup = await rest("rpc/duplicate_trip", tokenB, {
+      method: "POST",
+      body: JSON.stringify({
+        p_source_trip_id: tripId,
+        p_name: "Hacked",
+        p_country_code: "JP",
+        p_destination: null,
+        p_start_date: null,
+        p_end_date: null,
+      }),
+    });
+    expect(bDup.status).toBeGreaterThanOrEqual(400);
+
+    const bCopy = await rest(`trips?id=eq.${newTripId}&select=id`, tokenB);
+    expect(bCopy.body).toEqual([]);
+  }, 30_000);
+
+  it("bulk-changes packed state for the owner only", async () => {
+    const trip = await rest("trips", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Bulk", country_code: "JP" }),
+    });
+    const tripId = (trip.body as { id: string }[])[0].id;
+
+    for (const [name, qty] of [
+      ["Sock", 1],
+      ["Tee", 2],
+    ] as const) {
+      await rest("trip_entries", tokenA, {
+        method: "POST",
+        body: JSON.stringify({ trip_id: tripId, name, qty, position: qty }),
+      });
+    }
+
+    const pack = await rest("rpc/set_trip_packed", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ p_trip_id: tripId, p_packed: true }),
+    });
+    expect([200, 204]).toContain(pack.status);
+
+    const packed = await rest(
+      `trip_entries?trip_id=eq.${tripId}&select=is_packed,qty&order=position.asc`,
+      tokenA,
+    );
+    const packedRows = packed.body as { is_packed: boolean; qty: number }[];
+    expect(packedRows.every((row) => row.is_packed)).toBe(true);
+    // Only packed state changes; quantity is untouched.
+    expect(packedRows.map((row) => row.qty)).toEqual([1, 2]);
+
+    const unpack = await rest("rpc/set_trip_packed", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ p_trip_id: tripId, p_packed: false }),
+    });
+    expect([200, 204]).toContain(unpack.status);
+
+    const unpacked = await rest(`trip_entries?trip_id=eq.${tripId}&select=is_packed`, tokenA);
+    expect((unpacked.body as { is_packed: boolean }[]).every((row) => !row.is_packed)).toBe(true);
+
+    // A second user cannot bulk-change the trip.
+    const bPack = await rest("rpc/set_trip_packed", tokenB, {
+      method: "POST",
+      body: JSON.stringify({ p_trip_id: tripId, p_packed: true }),
+    });
+    expect(bPack.status).toBeGreaterThanOrEqual(400);
+
+    const stillUnpacked = await rest(`trip_entries?trip_id=eq.${tripId}&select=is_packed`, tokenA);
+    expect((stillUnpacked.body as { is_packed: boolean }[]).every((row) => !row.is_packed)).toBe(
+      true,
+    );
+  }, 30_000);
 });

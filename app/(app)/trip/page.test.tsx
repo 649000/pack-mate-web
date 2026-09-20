@@ -1,10 +1,13 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReusableBag, ReusableItem, Trip, TripBag, TripEntry } from "@/lib/types";
 
+const router = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("id=t1"),
+  useRouter: () => router,
 }));
 
 vi.mock("next/link", () => ({
@@ -32,12 +35,15 @@ vi.mock("@/lib/data", () => ({
   getActiveShareLink: vi.fn(),
   regenerateShareLink: vi.fn(),
   getDestinationFacts: vi.fn(),
+  duplicateTrip: vi.fn(),
+  setTripPacked: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+import { toast } from "sonner";
 import * as data from "@/lib/data";
 import { TripView } from "./page";
 
@@ -708,5 +714,165 @@ describe("TripView", () => {
     expect(within(card).getByText("Uncategorised")).toBeInTheDocument();
     expect(within(card).getByText("0.00 kg")).toBeInTheDocument();
     expect(within(card).getByText(/grey bars include items with no weight/i)).toBeInTheDocument();
+  });
+
+  it("duplicates the trip from the header and navigates to the copy", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([entry({ id: "e1", name: "Passport" })]);
+    vi.mocked(data.duplicateTrip).mockResolvedValue({ ...trip, id: "t2", name: "Japan (copy)" });
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByLabelText("Name")).toHaveValue("Japan (copy)");
+    expect(dialog.getByLabelText("Country")).toHaveValue("JP");
+    expect(dialog.getByLabelText("Destination")).toHaveValue("Kyoto");
+    expect(dialog.getByLabelText("Start date")).toHaveValue("");
+    expect(dialog.getByLabelText("End date")).toHaveValue("");
+
+    await user.click(dialog.getByRole("button", { name: /create copy/i }));
+
+    await waitFor(() =>
+      expect(data.duplicateTrip).toHaveBeenCalledWith("t1", {
+        name: "Japan (copy)",
+        destination: "Kyoto",
+        countryCode: "JP",
+        startDate: null,
+        endDate: null,
+      }),
+    );
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/trip?id=t2"));
+  });
+
+  it("does not duplicate when the header prompt is cancelled", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByRole("button", { name: /duplicate/i });
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(dialog.getByRole("button", { name: /cancel/i }));
+
+    expect(data.duplicateTrip).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("blocks duplicating without a country", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByRole("button", { name: /duplicate/i });
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.selectOptions(dialog.getByLabelText("Country"), "");
+    await user.click(dialog.getByRole("button", { name: /create copy/i }));
+
+    expect(data.duplicateTrip).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Select a country");
+  });
+
+  it("packs every entry regardless of the active filters", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Passport" }),
+      entry({ id: "e2", name: "Adapter" }),
+    ]);
+    vi.mocked(data.setTripPacked).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Passport");
+
+    await user.type(screen.getByLabelText("Search items"), "pass");
+    expect(screen.queryByText("Adapter")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+
+    await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
+    expect(data.updateEntry).not.toHaveBeenCalled();
+  });
+
+  it("unpacks every entry in one action", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Passport", is_packed: true }),
+      entry({ id: "e2", name: "Adapter", is_packed: true }),
+    ]);
+    vi.mocked(data.setTripPacked).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /^unpack all/i }));
+
+    await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", false));
+  });
+
+  it("offers a transient undo that restores the previous packed state", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Passport", is_packed: true }),
+      entry({ id: "e2", name: "Adapter", is_packed: false }),
+    ]);
+    vi.mocked(data.setTripPacked).mockResolvedValue(undefined);
+    vi.mocked(data.updateEntry).mockResolvedValue(entry({ id: "e2" }));
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+    await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
+
+    const call = vi
+      .mocked(toast.success)
+      .mock.calls.find(([message]) => /packed all/i.test(String(message)));
+    expect(call).toBeTruthy();
+    const options = call![1] as { action?: { onClick?: () => void } };
+
+    await act(async () => {
+      options.action?.onClick?.();
+    });
+
+    // Only the entry that was unpacked before is reverted.
+    await waitFor(() => expect(data.updateEntry).toHaveBeenCalledWith("e2", { is_packed: false }));
+    expect(data.updateEntry).not.toHaveBeenCalledWith("e1", expect.anything());
+  });
+
+  it("changes nothing but packed state", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({
+        id: "e1",
+        name: "Passport",
+        qty: 3,
+        is_with_me: true,
+        category: "documents",
+        weight_grams: 100,
+      }),
+    ]);
+    vi.mocked(data.setTripPacked).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Passport");
+
+    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+    await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
+
+    expect(data.updateEntry).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Quantity for Passport")).toHaveValue(3);
+    expect(screen.getByLabelText("Location")).toHaveValue("with_me");
   });
 });

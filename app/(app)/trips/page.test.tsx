@@ -14,6 +14,7 @@ vi.mock("@/lib/data", () => ({
   createTrip: vi.fn(),
   updateTrip: vi.fn(),
   deleteTrip: vi.fn(),
+  duplicateTrip: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -153,5 +154,59 @@ describe("TripsView", () => {
 
     await user.type(screen.getByLabelText("Search trips"), "zzz");
     expect(screen.getByText(/no trips match .*zzz/i)).toBeInTheDocument();
+  });
+
+  it("duplicates a trip, prefilling the fields and clearing the dates", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    vi.mocked(data.duplicateTrip).mockResolvedValue({ ...trip, id: "t2", name: "Japan (copy)" });
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+
+    expect(await screen.findByLabelText("Name")).toHaveValue("Japan (copy)");
+    expect(screen.getByLabelText("Country")).toHaveValue("JP");
+    expect(screen.getByLabelText("Destination")).toHaveValue("Kyoto");
+    expect(screen.getByLabelText("Start date")).toHaveValue("");
+    expect(screen.getByLabelText("End date")).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: /create copy/i }));
+
+    await waitFor(() =>
+      expect(data.duplicateTrip).toHaveBeenCalledWith("t1", {
+        name: "Japan (copy)",
+        destination: "Kyoto",
+        countryCode: "JP",
+        startDate: null,
+        endDate: null,
+      }),
+    );
+  });
+
+  it("does not duplicate a trip when the prompt is cancelled", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(data.duplicateTrip).not.toHaveBeenCalled();
+  });
+
+  it("blocks duplicating a trip without a country", async () => {
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    const user = userEvent.setup();
+    render(<TripsView />);
+    await screen.findByText("Japan");
+
+    await user.click(screen.getByRole("button", { name: /duplicate/i }));
+    await user.selectOptions(screen.getByLabelText("Country"), "");
+    await user.click(screen.getByRole("button", { name: /create copy/i }));
+
+    expect(data.duplicateTrip).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Select a country");
   });
 });

@@ -9,7 +9,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  Copy,
   GripVertical,
   Hand,
   Luggage,
@@ -42,7 +43,8 @@ import {
   Trash2,
   Weight,
 } from "lucide-react";
-import { formatDestination } from "@/lib/countries";
+import { COUNTRIES, formatDestination } from "@/lib/countries";
+import { duplicateTripDefaults } from "@/lib/trip-duplicate";
 import { EmptyState } from "@/components/empty-state";
 import { ListSearchToolbar } from "@/components/list-search";
 import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
@@ -79,6 +81,7 @@ import {
   addLibraryItemToTrip,
   createShareLink,
   deleteEntry,
+  duplicateTrip,
   getActiveShareLink,
   getProfile,
   getTrip,
@@ -90,6 +93,7 @@ import {
   reorderEntries,
   setBagParent,
   setEntryLocation,
+  setTripPacked,
   updateEntry,
 } from "@/lib/data";
 import {
@@ -102,12 +106,15 @@ import {
   filterEntriesByPacked,
   groupEntries,
   locationValue,
+  packedSnapshot,
+  packedUndoPatches,
   packingProgress,
   searchEntries,
   type BagNode,
   type CategoryFilter,
   type Destination,
   type PackedFilter,
+  type PackedSnapshot,
 } from "@/lib/packing";
 import type {
   DisplayWeightUnit,
@@ -380,6 +387,7 @@ function EntryGroup({
 
 export function TripView() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tripId = searchParams.get("id") ?? "";
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -417,6 +425,14 @@ export function TripView() {
   const [shareExpiry, setShareExpiry] = useState<ShareExpiry>("never");
   const [shareBusy, setShareBusy] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateName, setDuplicateName] = useState("");
+  const [duplicateDestination, setDuplicateDestination] = useState("");
+  const [duplicateCountry, setDuplicateCountry] = useState("");
+  const [duplicateStart, setDuplicateStart] = useState("");
+  const [duplicateEnd, setDuplicateEnd] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   function openAdd(mode: "item" | "bag" | "oneoff") {
     setAddMode(mode);
@@ -519,6 +535,7 @@ export function TripView() {
   }, []);
 
   const progress = useMemo(() => packingProgress(entries), [entries]);
+  const entryCountLabel = `${progress.total} ${progress.total === 1 ? "item" : "items"}`;
 
   const searchedEntries = useMemo(
     () => (search.trim() ? searchEntries(entries, search) : entries),
@@ -615,6 +632,44 @@ export function TripView() {
 
   function handleTogglePacked(entry: TripEntry) {
     void run(() => updateEntry(entry.id, { is_packed: !entry.is_packed }), "Updated");
+  }
+
+  // Applies to every entry on the trip, regardless of the active filters.
+  async function handleBulkPacked(packed: boolean) {
+    if (entries.length === 0) return;
+    const snapshot = packedSnapshot(entries);
+    const count = entries.length;
+    setBulkBusy(true);
+    try {
+      await setTripPacked(tripId, packed);
+      await refresh();
+      toast.success(
+        packed
+          ? `Packed all ${count} ${count === 1 ? "item" : "items"}`
+          : `Unpacked all ${count} ${count === 1 ? "item" : "items"}`,
+        {
+          duration: 10_000,
+          action: { label: "Undo", onClick: () => void undoBulkPacked(snapshot, packed) },
+        },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function undoBulkPacked(snapshot: PackedSnapshot, applied: boolean) {
+    try {
+      const patches = packedUndoPatches(snapshot, applied);
+      await Promise.all(
+        patches.map((patch) => updateEntry(patch.id, { is_packed: patch.is_packed })),
+      );
+      await refresh();
+      toast.success("Packing state restored");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Something went wrong");
+    }
   }
 
   function handleMove(entry: TripEntry, destination: Destination) {
@@ -730,6 +785,43 @@ export function TripView() {
     }
   }
 
+  function openDuplicate() {
+    if (!trip) return;
+    const defaults = duplicateTripDefaults(trip);
+    setDuplicateName(defaults.name);
+    setDuplicateDestination(defaults.destination ?? "");
+    setDuplicateCountry(defaults.countryCode);
+    setDuplicateStart(defaults.startDate ?? "");
+    setDuplicateEnd(defaults.endDate ?? "");
+    setDuplicateOpen(true);
+  }
+
+  async function handleDuplicate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!trip) return;
+    if (!duplicateCountry) {
+      toast.error("Select a country");
+      return;
+    }
+    setDuplicating(true);
+    try {
+      const newTrip = await duplicateTrip(trip.id, {
+        name: validateName(duplicateName, "Trip name"),
+        destination: duplicateDestination.trim() || null,
+        countryCode: duplicateCountry,
+        startDate: duplicateStart || null,
+        endDate: duplicateEnd || null,
+      });
+      setDuplicateOpen(false);
+      toast.success("Trip duplicated");
+      router.push(`/trip?id=${newTrip.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to duplicate trip");
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   if (!tripId) {
     return <p className="text-sm text-muted-foreground">No trip selected.</p>;
   }
@@ -770,6 +862,10 @@ export function TripView() {
           >
             {unit}
           </Button>
+          <Button type="button" variant="outline" size="sm" onClick={openDuplicate}>
+            <Copy aria-hidden="true" />
+            Duplicate
+          </Button>
           <Button type="button" size="sm" onClick={openShare}>
             Share
           </Button>
@@ -803,6 +899,26 @@ export function TripView() {
               value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
               className="h-1.5 w-full"
             />
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleBulkPacked(true)}
+                disabled={bulkBusy || progress.total === 0 || progress.packed === progress.total}
+              >
+                Pack all {entryCountLabel}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleBulkPacked(false)}
+                disabled={bulkBusy || progress.total === 0 || progress.packed === 0}
+              >
+                Unpack all {entryCountLabel}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1227,6 +1343,84 @@ export function TripView() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={duplicateOpen} onOpenChange={setDuplicateOpen}>
+        <DialogContent>
+          <form onSubmit={handleDuplicate}>
+            <DialogHeader>
+              <DialogTitle>Duplicate trip</DialogTitle>
+              <DialogDescription>
+                Give the copy a name, a country and dates. It starts with the same packing list,
+                unpacked.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="duplicate-name">Name</Label>
+                <Input
+                  id="duplicate-name"
+                  value={duplicateName}
+                  onChange={(event) => setDuplicateName(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="duplicate-country">Country</Label>
+                <select
+                  id="duplicate-country"
+                  className="h-8.5 w-full rounded-md border border-input bg-background px-3 text-[0.8125rem]"
+                  value={duplicateCountry}
+                  onChange={(event) => setDuplicateCountry(event.target.value)}
+                >
+                  <option value="">Select a country</option>
+                  {COUNTRIES.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="duplicate-destination">Destination</Label>
+                <Input
+                  id="duplicate-destination"
+                  value={duplicateDestination}
+                  onChange={(event) => setDuplicateDestination(event.target.value)}
+                  placeholder="City or place (optional)"
+                />
+              </div>
+              <div className="flex gap-3">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="duplicate-start">Start date</Label>
+                  <Input
+                    id="duplicate-start"
+                    type="date"
+                    value={duplicateStart}
+                    onChange={(event) => setDuplicateStart(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="duplicate-end">End date</Label>
+                  <Input
+                    id="duplicate-end"
+                    type="date"
+                    value={duplicateEnd}
+                    onChange={(event) => setDuplicateEnd(event.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDuplicateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={duplicating}>
+                {duplicating ? "Duplicating..." : "Create copy"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

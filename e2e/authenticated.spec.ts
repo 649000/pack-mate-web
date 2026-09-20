@@ -51,10 +51,11 @@ async function createBag(page: Page, name: string, limit?: string): Promise<void
   await expect(page.getByRole("dialog")).toBeHidden();
 }
 
-async function createTrip(page: Page, name: string): Promise<void> {
+async function createTrip(page: Page, name: string, country = "JP"): Promise<void> {
   await page.goto("/trips");
   await page.getByRole("button", { name: /new trip/i }).click();
   await page.getByLabel("Name").fill(name);
+  await page.getByLabel("Country").selectOption(country);
   await page.getByRole("button", { name: /^save$/i }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
 }
@@ -90,10 +91,7 @@ test.describe("authenticated critical path", () => {
     await signUp(page);
 
     // Create a trip.
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await createTrip(page, "Japan");
     await expect(page.getByText("Japan")).toBeVisible();
 
     // Open the trip and add a one-off item.
@@ -200,10 +198,7 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText("Navy cover")).toBeVisible();
 
     // Create a trip and add the item to it.
-    await page.goto("/trips");
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
+    await createTrip(page, "Japan");
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
@@ -242,10 +237,7 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText("2.00 kg")).toBeVisible();
 
     // Create a trip, add the bag, and put the item inside it.
-    await page.goto("/trips");
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
+    await createTrip(page, "Japan");
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
@@ -282,10 +274,7 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText("Toothbrush").first()).toBeVisible();
 
     // Trip with both bags, the item inside Toiletry.
-    await page.goto("/trips");
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
+    await createTrip(page, "Japan");
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
@@ -327,10 +316,7 @@ test.describe("authenticated critical path", () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
 
-    await page.goto("/trips");
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
+    await createTrip(page, "Japan");
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
@@ -357,10 +343,7 @@ test.describe("authenticated critical path", () => {
     await signUp(page);
 
     // A trip with one item.
-    await page.getByRole("button", { name: /new trip/i }).click();
-    await page.getByLabel("Name").fill("Japan");
-    await page.getByRole("button", { name: /^save$/i }).click();
-    await expect(page.getByRole("dialog")).toBeHidden();
+    await createTrip(page, "Japan");
     await expect(page.getByText("Japan")).toBeVisible();
     await page.getByText("Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
@@ -622,7 +605,7 @@ test.describe("authenticated critical path", () => {
     expect(packedTripMatch.bytes.length).not.toBe(packedTripBlank.bytes.length);
 
     // A trip with nothing packed: both modes produce the same sheet.
-    await createTrip(page, "Norway");
+    await createTrip(page, "Norway", "NO");
     await openTrip(page, "Norway");
     await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Tent");
@@ -631,6 +614,65 @@ test.describe("authenticated critical path", () => {
     const looseBlank = await exportPdf(page, "blank");
     const looseMatch = await exportPdf(page, "packed");
     expect(looseMatch.bytes.length).toBe(looseBlank.bytes.length);
+  });
+
+  test("duplicates a trip's packing list into a new trip", async ({ page }) => {
+    await signUp(page);
+
+    // A trip with one item, packed.
+    await createTrip(page, "Japan");
+
+    await openTrip(page, "Japan");
+    await openAddDialog(page, /one-off item/i);
+    await page.getByLabel("Add a one-off item").fill("Passport");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await expect(page.getByText("Passport")).toBeVisible();
+    await page.getByRole("checkbox", { name: /mark packed/i }).click();
+    await expect(page.getByText(/1\/1 packed/i).first()).toBeVisible();
+
+    // Duplicate from the header: fields prefilled, dates cleared.
+    await page.getByRole("button", { name: /^duplicate$/i }).click();
+    await expect(page.getByLabel("Name")).toHaveValue("Japan (copy)");
+    await expect(page.getByLabel("Country")).toHaveValue("JP");
+    await expect(page.getByLabel("Start date")).toHaveValue("");
+    await page.getByLabel("Name").fill("Japan 2027");
+    await page.getByLabel("Start date").fill("2027-03-01");
+    await page.getByRole("button", { name: /create copy/i }).click();
+
+    // The copy lands open with the same item, unpacked, and the new fields.
+    await expect(page).toHaveURL(/\/trip\?id=/);
+    await expect(page.getByRole("heading", { name: "Japan 2027" })).toBeVisible();
+    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(page.getByText(/0\/1 packed/i).first()).toBeVisible();
+  });
+
+  test("packs all entries, undoes, and unpacks all", async ({ page }) => {
+    await signUp(page);
+
+    // A trip with two items.
+    await createTrip(page, "Japan");
+
+    await openTrip(page, "Japan");
+    for (const name of ["Passport", "Adapter"]) {
+      await openAddDialog(page, /one-off item/i);
+      await page.getByLabel("Add a one-off item").fill(name);
+      await page.getByRole("button", { name: /^add$/i }).click();
+      await expect(page.getByLabel(`Quantity for ${name}`)).toBeVisible();
+    }
+
+    // Pack all in one action.
+    await page.getByRole("button", { name: /^pack all/i }).click();
+    await expect(page.getByText(/2\/2 packed/i).first()).toBeVisible();
+
+    // Undo restores the previous (unpacked) state.
+    await page.getByRole("button", { name: /^undo$/i }).click();
+    await expect(page.getByText(/0\/2 packed/i).first()).toBeVisible();
+
+    // Pack again, then unpack all.
+    await page.getByRole("button", { name: /^pack all/i }).click();
+    await expect(page.getByText(/2\/2 packed/i).first()).toBeVisible();
+    await page.getByRole("button", { name: /^unpack all/i }).click();
+    await expect(page.getByText(/0\/2 packed/i).first()).toBeVisible();
   });
 
   test("every surface is usable at mobile and desktop widths", async ({ page }) => {

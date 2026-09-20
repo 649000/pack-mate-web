@@ -14,6 +14,8 @@ import {
   groupEntries,
   hasUncategorised,
   locationValue,
+  packedSnapshot,
+  packedUndoPatches,
   packingProgress,
   searchEntries,
 } from "./packing";
@@ -313,5 +315,34 @@ describe("hasUncategorised", () => {
   it("detects uncategorised entries", () => {
     expect(hasUncategorised([entry({ id: "a", category: "gear" })])).toBe(false);
     expect(hasUncategorised([entry({ id: "a", category: "gear" }), entry({ id: "b" })])).toBe(true);
+  });
+});
+
+describe("packedSnapshot / packedUndoPatches", () => {
+  const entries = [
+    { id: "a", is_packed: true },
+    { id: "b", is_packed: false },
+    { id: "c", is_packed: true },
+  ];
+
+  it("snapshots each entry's packed state", () => {
+    expect(packedSnapshot(entries)).toEqual([
+      { id: "a", is_packed: true },
+      { id: "b", is_packed: false },
+      { id: "c", is_packed: true },
+    ]);
+  });
+
+  it("reverts only the entries a pack-all changed", () => {
+    expect(packedUndoPatches(packedSnapshot(entries), true)).toEqual([
+      { id: "b", is_packed: false },
+    ]);
+  });
+
+  it("reverts only the entries an unpack-all changed", () => {
+    expect(packedUndoPatches(packedSnapshot(entries), false)).toEqual([
+      { id: "a", is_packed: true },
+      { id: "c", is_packed: true },
+    ]);
   });
 });

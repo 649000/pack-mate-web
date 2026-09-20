@@ -4,28 +4,39 @@ const mocks = vi.hoisted(() => {
   const result: { data: unknown; error: unknown } = { data: null, error: null };
   const single = vi.fn(() => Promise.resolve(result));
   const maybeSingle = vi.fn(() => Promise.resolve(result));
-  const select = vi.fn(() => ({ single, maybeSingle }));
-  const eq = vi.fn(() => ({ select, eq }));
-  const update = vi.fn(() => ({ eq, select }));
-  const insert = vi.fn(() => ({ select }));
-  const upsert = vi.fn(() => ({ select }));
-  const from = vi.fn(() => ({ upsert, select, insert, update }));
-  return { from, upsert, insert, update, eq, select, single, maybeSingle };
+  const chain: Record<string, unknown> = {};
+  const select = vi.fn(() => chain);
+  const eq = vi.fn(() => chain);
+  const update = vi.fn(() => chain);
+  const insert = vi.fn(() => chain);
+  const upsert = vi.fn(() => chain);
+  const rpc = vi.fn(() => Promise.resolve(result));
+  chain.select = select;
+  chain.eq = eq;
+  chain.update = update;
+  chain.insert = insert;
+  chain.upsert = upsert;
+  chain.single = single;
+  chain.maybeSingle = maybeSingle;
+  const from = vi.fn(() => chain);
+  return { from, upsert, insert, update, eq, select, single, maybeSingle, rpc };
 });
 
 const authState = vi.hoisted(() => ({
   currentUser: { uid: "u1" } as { uid: string } | null,
 }));
 
-vi.mock("./supabase", () => ({ supabase: { from: mocks.from } }));
+vi.mock("./supabase", () => ({ supabase: { from: mocks.from, rpc: mocks.rpc } }));
 vi.mock("./firebase", () => ({ getFirebaseAuth: () => authState }));
 
 import {
   createBag,
   createItem,
   createTrip,
+  duplicateTrip,
   getProfile,
   setBagParent,
+  setTripPacked,
   updateBag,
   updateEntry,
   updateItem,
@@ -429,5 +440,76 @@ describe("createTrip and updateTrip", () => {
       start_date: null,
       end_date: null,
     });
+  });
+});
+
+describe("duplicateTrip", () => {
+  it("validates the fields and calls the duplicate RPC with the source id", async () => {
+    mocks.rpc.mockResolvedValue({ data: "t2", error: null });
+    mocks.single.mockResolvedValue({ data: { id: "t2", name: "Kyoto copy" }, error: null });
+
+    await duplicateTrip("t1", {
+      name: "  Kyoto copy  ",
+      destination: "  Osaka  ",
+      countryCode: "jp",
+      startDate: null,
+      endDate: null,
+    });
+
+    expect(mocks.rpc).toHaveBeenCalledWith("duplicate_trip", {
+      p_source_trip_id: "t1",
+      p_name: "Kyoto copy",
+      p_country_code: "JP",
+      p_destination: "Osaka",
+      p_start_date: null,
+      p_end_date: null,
+    });
+    expect(mocks.from).toHaveBeenCalledWith("trips");
+  });
+
+  it("rejects an unknown country before calling the RPC", async () => {
+    await expect(
+      duplicateTrip("t1", {
+        name: "Nowhere",
+        destination: null,
+        countryCode: "ZZ",
+        startDate: null,
+        endDate: null,
+      }),
+    ).rejects.toThrow(/valid country/i);
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an RPC error", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "trip not found" } });
+
+    await expect(
+      duplicateTrip("t1", {
+        name: "Japan",
+        destination: null,
+        countryCode: "JP",
+        startDate: null,
+        endDate: null,
+      }),
+    ).rejects.toThrow("trip not found");
+  });
+});
+
+describe("setTripPacked", () => {
+  it("calls the bulk packed RPC for the trip", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: null });
+
+    await setTripPacked("t1", true);
+
+    expect(mocks.rpc).toHaveBeenCalledWith("set_trip_packed", {
+      p_trip_id: "t1",
+      p_packed: true,
+    });
+  });
+
+  it("surfaces an RPC error", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "trip not found" } });
+
+    await expect(setTripPacked("t1", false)).rejects.toThrow("trip not found");
   });
 });

@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } f
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Columns3, ListChecks, MapPin, Pencil, Plus, SearchX, Trash2 } from "lucide-react";
+import { Columns3, Copy, ListChecks, MapPin, Pencil, Plus, SearchX, Trash2 } from "lucide-react";
 import {
   getCoreRowModel,
   getSortedRowModel,
@@ -53,7 +53,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { COUNTRIES, formatDestination } from "@/lib/countries";
-import { createTrip, deleteTrip, listTrips, updateTrip } from "@/lib/data";
+import { createTrip, deleteTrip, duplicateTrip, listTrips, updateTrip } from "@/lib/data";
+import { duplicateTripDefaults } from "@/lib/trip-duplicate";
 import { filterByName } from "@/lib/packing";
 import type { Trip } from "@/lib/types";
 import { validateName } from "@/lib/validation";
@@ -69,6 +70,7 @@ export function TripsView() {
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Trip | null>(null);
+  const [duplicating, setDuplicating] = useState<Trip | null>(null);
   const [name, setName] = useState("");
   const [destination, setDestination] = useState("");
   const [countryCode, setCountryCode] = useState("");
@@ -100,6 +102,7 @@ export function TripsView() {
 
   function openCreate() {
     setEditing(null);
+    setDuplicating(null);
     setName("");
     setDestination("");
     setCountryCode("");
@@ -110,11 +113,24 @@ export function TripsView() {
 
   const openEdit = useCallback((trip: Trip) => {
     setEditing(trip);
+    setDuplicating(null);
     setName(trip.name);
     setDestination(trip.destination ?? "");
     setCountryCode(trip.country_code);
     setStartDate(trip.start_date ?? "");
     setEndDate(trip.end_date ?? "");
+    setEditorOpen(true);
+  }, []);
+
+  const openDuplicate = useCallback((trip: Trip) => {
+    const defaults = duplicateTripDefaults(trip);
+    setEditing(null);
+    setDuplicating(trip);
+    setName(defaults.name);
+    setDestination(defaults.destination ?? "");
+    setCountryCode(defaults.countryCode);
+    setStartDate(defaults.startDate ?? "");
+    setEndDate(defaults.endDate ?? "");
     setEditorOpen(true);
   }, []);
 
@@ -136,6 +152,9 @@ export function TripsView() {
       if (editing) {
         await updateTrip(editing.id, payload);
         toast.success("Trip updated");
+      } else if (duplicating) {
+        await duplicateTrip(duplicating.id, payload);
+        toast.success("Trip duplicated");
       } else {
         await createTrip(payload);
         toast.success("Trip created");
@@ -216,6 +235,11 @@ export function TripsView() {
         header: () => <span className="sr-only">Actions</span>,
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
+            <RecordAction
+              icon={Copy}
+              label="Duplicate"
+              onClick={() => openDuplicate(row.original)}
+            />
             <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(row.original)} />
             <RecordAction
               icon={Trash2}
@@ -226,7 +250,7 @@ export function TripsView() {
         ),
       },
     ],
-    [openEdit],
+    [openEdit, openDuplicate],
   );
 
   const table = useReactTable({
@@ -318,9 +342,13 @@ export function TripsView() {
         <DialogContent>
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle>{editing ? "Edit trip" : "New trip"}</DialogTitle>
+              <DialogTitle>
+                {editing ? "Edit trip" : duplicating ? "Duplicate trip" : "New trip"}
+              </DialogTitle>
               <DialogDescription>
-                Give your trip a name, a country and optional dates.
+                {duplicating
+                  ? "Give the copy a name, a country and dates. It starts with the same packing list, unpacked."
+                  : "Give your trip a name, a country and optional dates."}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
@@ -384,7 +412,7 @@ export function TripsView() {
                 Cancel
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving..." : duplicating ? "Create copy" : "Save"}
               </Button>
             </DialogFooter>
           </form>

@@ -251,6 +251,24 @@ export async function deleteTrip(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// Creates a new trip from the given fields and copies the source trip's
+// packing list into it. The source is verified server-side, and the whole copy
+// runs in one transaction.
+export async function duplicateTrip(sourceTripId: string, input: TripInput): Promise<Trip> {
+  const { name, destination, country_code, start_date, end_date } = validateTrip(input);
+  const { data, error } = await supabase.rpc("duplicate_trip", {
+    p_source_trip_id: sourceTripId,
+    p_name: name,
+    p_country_code: country_code,
+    p_destination: destination,
+    p_start_date: start_date,
+    p_end_date: end_date,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("No data returned");
+  return getTrip(data as string);
+}
+
 // ---------------------------------------------------------------------------
 // Packing list (trip-scoped bags and entries)
 // ---------------------------------------------------------------------------
@@ -380,6 +398,16 @@ export async function setEntryLocation(
 
 export async function deleteEntry(id: string): Promise<void> {
   const { error } = await supabase.from("trip_entries").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+// Marks every entry on a trip packed or unpacked in one action. The trip is
+// verified server-side and only packed state changes.
+export async function setTripPacked(tripId: string, packed: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_trip_packed", {
+    p_trip_id: tripId,
+    p_packed: packed,
+  });
   if (error) throw new Error(error.message);
 }
 

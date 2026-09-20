@@ -159,6 +159,26 @@ export function filterEntriesByPacked<E extends { is_packed: boolean }>(
   return entries.filter((entry) => !entry.is_packed);
 }
 
+export type PackedSnapshot = { id: string; is_packed: boolean }[];
+
+// Records the packed state of each entry so a bulk action can be undone.
+export function packedSnapshot<E extends { id: string; is_packed: boolean }>(
+  entries: E[],
+): PackedSnapshot {
+  return entries.map((entry) => ({ id: entry.id, is_packed: entry.is_packed }));
+}
+
+// The inverse of a bulk action: the entries whose previous state differs from
+// the applied value, each carrying the value it should be restored to.
+export function packedUndoPatches(
+  snapshot: PackedSnapshot,
+  applied: boolean,
+): { id: string; is_packed: boolean }[] {
+  return snapshot
+    .filter((row) => row.is_packed !== applied)
+    .map((row) => ({ id: row.id, is_packed: row.is_packed }));
+}
+
 export function categoriesInUse<E extends { category: ItemCategory | null }>(
   entries: E[],
 ): ItemCategory[] {
