@@ -994,7 +994,7 @@ export function TripView() {
           title={`No items match “${search}”.`}
           description="Try a different search term."
         />
-      ) : progress.total === 0 ? (
+      ) : progress.total === 0 && bags.length === 0 ? (
         <EmptyState
           icon={ClipboardList}
           title="Nothing on this list yet."
@@ -1006,7 +1006,7 @@ export function TripView() {
             </Button>
           }
         />
-      ) : filteredEntries.length === 0 ? (
+      ) : filteredEntries.length === 0 && bags.length === 0 ? (
         packedFilter !== "all" ? (
           packedFilter === "unpacked" ? (
             <EmptyState

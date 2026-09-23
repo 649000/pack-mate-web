@@ -523,6 +523,23 @@ export function TripsView() {
                               {formatDates(featured)}
                             </span>
                           </div>
+                          <div className="pointer-events-auto relative z-10 flex items-center gap-1 pt-1">
+                            <RecordAction
+                              icon={Copy}
+                              label="Duplicate"
+                              onClick={() => openDuplicate(featured)}
+                            />
+                            <RecordAction
+                              icon={Pencil}
+                              label="Edit"
+                              onClick={() => openEdit(featured)}
+                            />
+                            <RecordAction
+                              icon={Trash2}
+                              label="Delete"
+                              onClick={() => setPendingDelete(featured)}
+                            />
+                          </div>
                         </div>
 
                         <div className="pointer-events-auto relative z-10 flex w-full max-w-sm flex-col gap-3">

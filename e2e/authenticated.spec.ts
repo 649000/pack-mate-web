@@ -513,7 +513,13 @@ test.describe("authenticated critical path", () => {
     await page.getByRole("button", { name: /^regenerate$/i }).click();
     await expect(page.getByText(/new link created/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /^revoke$/i }).click();
+    // Regenerating revokes the old link but keeps it listed, so revoke the one
+    // that is still active rather than whichever row happens to match first.
+    await page
+      .getByRole("row")
+      .filter({ hasText: /active/i })
+      .getByRole("button", { name: /^revoke$/i })
+      .click();
     await expect(page.getByText("revoked").first()).toBeVisible();
   });
 
@@ -553,12 +559,15 @@ test.describe("authenticated critical path", () => {
         .evaluateAll((elements) => elements.map((element) => element.getAttribute("aria-label")));
     const orderBefore = await labels();
     const handles = loose.getByLabel("Reorder");
+    await handles.nth(1).scrollIntoViewIfNeeded();
+    await handles.nth(1).hover();
     const firstBox = await handles.first().boundingBox();
     const secondBox = await handles.nth(1).boundingBox();
     if (!firstBox || !secondBox) throw new Error("Reorder handle not visible");
-    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height / 2);
     await page.mouse.down();
-    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2, {
+    // dnd-kit needs to clear its activation distance before tracking the move.
+    await page.mouse.move(secondBox.x + secondBox.width / 2, secondBox.y - 20, { steps: 5 });
+    await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y - firstBox.height / 2, {
       steps: 10,
     });
     await page.mouse.up();

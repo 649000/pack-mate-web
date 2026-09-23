@@ -24,6 +24,9 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    // The shared-links surface copies to the clipboard; headless Chromium denies
+    // the async Clipboard API without these permissions.
+    permissions: ["clipboard-read", "clipboard-write"],
   },
   expect: {
     timeout: 15_000,

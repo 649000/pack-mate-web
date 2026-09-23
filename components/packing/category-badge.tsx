@@ -7,10 +7,12 @@ export function CategoryBadge({
   category,
   className,
 }: {
-  category: ItemCategory | null;
+  category: ItemCategory | null | undefined;
   className?: string;
 }) {
-  if (category === null) return null;
+  // Older shared payloads omit the category field entirely, so treat anything
+  // that is not a known category as uncategorised rather than crashing.
+  if (!category || !(category in ITEM_CATEGORY_LABELS)) return null;
   return (
     <Badge
       variant="secondary"

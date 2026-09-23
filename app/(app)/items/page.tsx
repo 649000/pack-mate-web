@@ -407,7 +407,7 @@ export function ItemsView() {
       ) : (
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[44rem] border-collapse">
+            <table className="w-full border-collapse sm:min-w-[44rem]">
               <thead className="border-b border-border bg-muted/40">
                 <tr>
                   <HeadCell>Item</HeadCell>

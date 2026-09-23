@@ -53,13 +53,28 @@ describe("trip destination and country (integration)", () => {
     expect(max.status).toBe(201);
   }, 30_000);
 
-  it("exposes the destination and country in the shared payload at version 2", async () => {
+  it("exposes destination, country, bag icon and item category in the shared payload at version 3", async () => {
     const created = await createTrip({
       name: "Shared destination",
       country_code: "JP",
       destination: "Kyoto",
     });
     const tripId = (created.body as { id: string }[])[0].id;
+
+    await rest("trip_bags", token, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Suitcase", position: 0, icon: "suitcase" }),
+    });
+    await rest("trip_entries", token, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        name: "Toothbrush",
+        qty: 1,
+        position: 0,
+        category: "toiletries",
+      }),
+    });
 
     const link = await rest("share_links", token, {
       method: "POST",
@@ -76,9 +91,13 @@ describe("trip destination and country (integration)", () => {
     const payload = shared.body as {
       v: number;
       trip: { destination: string | null; country_code: string };
+      bags: { name: string; icon: string | null }[];
+      entries: { name: string; category: string | null }[];
     };
-    expect(payload.v).toBe(2);
+    expect(payload.v).toBe(3);
     expect(payload.trip.destination).toBe("Kyoto");
     expect(payload.trip.country_code).toBe("JP");
+    expect(payload.bags[0].icon).toBe("suitcase");
+    expect(payload.entries[0].category).toBe("toiletries");
   }, 30_000);
 });

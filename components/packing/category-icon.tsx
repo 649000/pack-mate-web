@@ -8,9 +8,9 @@ export function CategoryIcon({
   category,
   className,
 }: {
-  category: ItemCategory | null;
+  category: ItemCategory | null | undefined;
   className?: string;
 }) {
-  const Icon = category === null ? CATEGORY_ICON_FALLBACK : CATEGORY_ICONS[category];
+  const Icon = category ? CATEGORY_ICONS[category] : CATEGORY_ICON_FALLBACK;
   return <Icon className={cn("size-3.5 shrink-0", className)} aria-hidden="true" />;
 }

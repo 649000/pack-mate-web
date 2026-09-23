@@ -52,6 +52,7 @@ export const CATEGORY_ICONS = {
 // Shown for items that have no category.
 export const CATEGORY_ICON_FALLBACK = Package;
 
-export function categoryIcon(category: ItemCategory | null): LucideIcon {
-  return category === null ? CATEGORY_ICON_FALLBACK : CATEGORY_ICONS[category];
+export function categoryIcon(category: ItemCategory | null | undefined): LucideIcon {
+  if (!category) return CATEGORY_ICON_FALLBACK;
+  return CATEGORY_ICONS[category] ?? CATEGORY_ICON_FALLBACK;
 }
