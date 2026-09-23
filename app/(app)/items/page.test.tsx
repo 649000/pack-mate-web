@@ -326,12 +326,12 @@ describe("ItemsView", () => {
     render(<ItemsView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    await user.selectOptions(screen.getByLabelText("Filter items by category"), "clothing");
 
     expect(screen.getByText("Tee")).toBeInTheDocument();
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "All" }));
+    await user.selectOptions(screen.getByLabelText("Filter items by category"), "all");
 
     expect(screen.getByText("Charger")).toBeInTheDocument();
     expect(screen.getByText("Adapter")).toBeInTheDocument();
@@ -348,7 +348,7 @@ describe("ItemsView", () => {
     render(<ItemsView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    await user.selectOptions(screen.getByLabelText("Filter items by category"), "clothing");
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
 
     const row = screen.getByText("Tee").closest("tr");
@@ -386,7 +386,7 @@ describe("ItemsView", () => {
     expect(screen.getByText("Tee light")).toBeInTheDocument();
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    await user.selectOptions(screen.getByLabelText("Filter items by category"), "clothing");
     expect(screen.getByText("Tee")).toBeInTheDocument();
     expect(screen.queryByText("Tee light")).not.toBeInTheDocument();
   });
@@ -402,8 +402,9 @@ describe("ItemsView", () => {
 
     await user.type(screen.getByLabelText("Search items"), "charger");
 
-    expect(screen.getByRole("button", { name: "Clothing" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Electronics" })).toBeInTheDocument();
+    const select = screen.getByLabelText("Filter items by category");
+    expect(within(select).getByRole("option", { name: "Clothing" })).toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: "Electronics" })).toBeInTheDocument();
   });
 
   it("shows an empty state naming the query when nothing matches", async () => {

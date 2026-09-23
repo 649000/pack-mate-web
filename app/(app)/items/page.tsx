@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { CategoryIcon } from "@/components/packing/category-icon";
-import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
+import { CategoryFilterSelect } from "@/components/packing/category-filter-chips";
 import {
   Dialog,
   DialogContent,
@@ -330,41 +330,48 @@ export function ItemsView() {
       ) : null}
 
       {hasItems ? (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <CategoryFilterChips
-            entries={items}
-            value={categoryFilter}
-            onChange={(value) => {
-              setCategoryFilter(value);
-              setPage(1);
-            }}
-            label="Filter items by category"
-          />
-          <div className="flex items-center gap-2">
-            <ListSearchToolbar
-              id="item-search"
-              label="Search items"
-              value={query}
-              onChange={(value) => {
-                setQuery(value);
-                setPage(1);
-              }}
-              placeholder="Search items"
-            />
-            <select
-              aria-label="Sort items"
-              className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
-              value={sort}
-              onChange={(event) => {
-                setSort(event.target.value as ItemSort);
-                setPage(1);
-              }}
-            >
-              <option value="name">Sort: Name</option>
-              <option value="weight-desc">Weight: High to low</option>
-              <option value="weight-asc">Weight: Low to high</option>
-            </select>
-          </div>
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardContent className="flex flex-wrap items-center gap-2 p-4">
+              <CategoryFilterSelect
+                entries={items}
+                value={categoryFilter}
+                onChange={(value) => {
+                  setCategoryFilter(value);
+                  setPage(1);
+                }}
+                label="Filter items by category"
+                className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+              />
+              <select
+                aria-label="Sort items"
+                className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+                value={sort}
+                onChange={(event) => {
+                  setSort(event.target.value as ItemSort);
+                  setPage(1);
+                }}
+              >
+                <option value="name">Sort: Name</option>
+                <option value="weight-desc">Weight: High to low</option>
+                <option value="weight-asc">Weight: Low to high</option>
+              </select>
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-1">
+            <CardContent className="flex flex-wrap items-center gap-2 p-4">
+              <ListSearchToolbar
+                id="item-search"
+                label="Search items"
+                value={query}
+                onChange={(value) => {
+                  setQuery(value);
+                  setPage(1);
+                }}
+                placeholder="Search items"
+              />
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 

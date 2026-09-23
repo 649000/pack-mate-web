@@ -31,6 +31,7 @@ vi.mock("@/lib/data", () => ({
   setBagParent: vi.fn(),
   setEntryLocation: vi.fn(),
   updateEntry: vi.fn(),
+  updateTrip: vi.fn(),
   createShareLink: vi.fn(),
   getActiveShareLink: vi.fn(),
   regenerateShareLink: vi.fn(),
@@ -118,6 +119,7 @@ function entry(partial: Partial<TripEntry> & { id: string }): TripEntry {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   vi.mocked(data.listBags).mockResolvedValue([]);
   vi.mocked(data.listItems).mockResolvedValue([]);
   vi.mocked(data.getProfile).mockResolvedValue(null);
@@ -366,6 +368,28 @@ describe("TripView", () => {
     expect(screen.getByAltText("Charger")).toBeInTheDocument();
   });
 
+  it("expands and collapses the details of every entry at once", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Charger", description: "65W" }),
+      entry({ id: "e2", name: "Adapter", description: "EU plug" }),
+    ]);
+    const user = userEvent.setup();
+    render(<TripView />);
+    await screen.findByText("Charger");
+
+    expect(screen.queryByText("65W")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /expand all/i }));
+    expect(screen.getByText("65W")).toBeInTheDocument();
+    expect(screen.getByText("EU plug")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /collapse all/i }));
+    expect(screen.queryByText("65W")).not.toBeInTheDocument();
+    expect(screen.queryByText("EU plug")).not.toBeInTheDocument();
+  });
+
   it("edits an entry's details", async () => {
     vi.mocked(data.getTrip).mockResolvedValue(trip);
     vi.mocked(data.listTripBags).mockResolvedValue([]);
@@ -577,14 +601,14 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    await user.selectOptions(screen.getByLabelText("Filter entries by category"), "clothing");
 
     expect(screen.getByText("Tee")).toBeInTheDocument();
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
     expect(screen.queryByText("Passport")).not.toBeInTheDocument();
     expect(screen.getByText("Not assigned")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "All" }));
+    await user.selectOptions(screen.getByLabelText("Filter entries by category"), "all");
 
     expect(screen.getByText("Charger")).toBeInTheDocument();
     expect(screen.getByText("Passport")).toBeInTheDocument();
@@ -603,7 +627,7 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "Clothing" }));
+    await user.selectOptions(screen.getByLabelText("Filter entries by category"), "clothing");
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
 
     const entryElement = screen.getByText("Tee").closest("div.rounded-md") as HTMLElement;
@@ -625,6 +649,20 @@ describe("TripView", () => {
     expect(await screen.findByTestId("trip-countdown")).toBeInTheDocument();
   });
 
+  it("shows the trip date range and length in the header", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue({
+      ...trip,
+      start_date: "2025-10-12",
+      end_date: "2025-10-19",
+    });
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    render(<TripView />);
+
+    expect(await screen.findByText("12 Oct 2025 – 19 Oct 2025")).toBeInTheDocument();
+    expect(screen.getByText(/8 days \(7 nights\)/)).toBeInTheDocument();
+  });
+
   it("filters entries by packed state across locations without changing progress", async () => {
     vi.mocked(data.getTrip).mockResolvedValue(trip);
     vi.mocked(data.listTripBags).mockResolvedValue([bag]);
@@ -637,19 +675,21 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Charger");
 
-    await user.click(screen.getByRole("button", { name: "To pack" }));
+    const packedFilters = screen.getByRole("group", { name: "Filter entries by packed state" });
+
+    await user.click(within(packedFilters).getByRole("button", { name: /^unpacked/i }));
 
     expect(screen.getByText("Tee")).toBeInTheDocument();
     expect(screen.getByText("Passport")).toBeInTheDocument();
     expect(screen.queryByText("Charger")).not.toBeInTheDocument();
     expect(screen.getByText(/1\/3 packed/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Packed" }));
+    await user.click(within(packedFilters).getByRole("button", { name: /^packed/i }));
 
     expect(screen.getByText("Charger")).toBeInTheDocument();
     expect(screen.queryByText("Tee")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "All items" }));
+    await user.click(within(packedFilters).getByRole("button", { name: /^all/i }));
 
     expect(screen.getByText("Tee")).toBeInTheDocument();
     expect(screen.getByText("Passport")).toBeInTheDocument();
@@ -665,7 +705,7 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "To pack" }));
+    await user.click(screen.getByRole("button", { name: /^unpacked/i }));
 
     expect(await screen.findByText(/everything is packed/i)).toBeInTheDocument();
     expect(screen.queryByText("Tee")).not.toBeInTheDocument();
@@ -679,7 +719,7 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Tee");
 
-    await user.click(screen.getByRole("button", { name: "Packed" }));
+    await user.click(screen.getByRole("button", { name: /^packed/i }));
 
     expect(await screen.findByText(/nothing packed yet/i)).toBeInTheDocument();
   });
@@ -756,6 +796,33 @@ describe("TripView", () => {
     await waitFor(() => expect(router.push).toHaveBeenCalledWith("/trip?id=t2"));
   });
 
+  it("edits the trip from the header", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    vi.mocked(data.updateTrip).mockResolvedValue({ ...trip, name: "Japan 2027" });
+    const user = userEvent.setup();
+    render(<TripView />);
+
+    await user.click(await screen.findByRole("button", { name: /edit trip/i }));
+
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getByLabelText("Name")).toHaveValue("Japan");
+    await user.clear(dialog.getByLabelText("Name"));
+    await user.type(dialog.getByLabelText("Name"), "Japan 2027");
+    await user.click(dialog.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(data.updateTrip).toHaveBeenCalledWith("t1", {
+        name: "Japan 2027",
+        destination: "Kyoto",
+        countryCode: "JP",
+        startDate: null,
+        endDate: null,
+      }),
+    );
+  });
+
   it("does not duplicate when the header prompt is cancelled", async () => {
     vi.mocked(data.getTrip).mockResolvedValue(trip);
     vi.mocked(data.listTripBags).mockResolvedValue([]);
@@ -804,7 +871,8 @@ describe("TripView", () => {
     await user.type(screen.getByLabelText("Search items"), "pass");
     expect(screen.queryByText("Adapter")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+    await user.click(screen.getByRole("button", { name: /bulk actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^pack all/i }));
 
     await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
     expect(data.updateEntry).not.toHaveBeenCalled();
@@ -822,7 +890,8 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Passport");
 
-    await user.click(screen.getByRole("button", { name: /^unpack all/i }));
+    await user.click(screen.getByRole("button", { name: /bulk actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^unpack all/i }));
 
     await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", false));
   });
@@ -840,7 +909,8 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Passport");
 
-    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+    await user.click(screen.getByRole("button", { name: /bulk actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^pack all/i }));
     await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
 
     const call = vi
@@ -876,7 +946,8 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Passport");
 
-    await user.click(screen.getByRole("button", { name: /^pack all/i }));
+    await user.click(screen.getByRole("button", { name: /bulk actions/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^pack all/i }));
     await waitFor(() => expect(data.setTripPacked).toHaveBeenCalledWith("t1", true));
 
     expect(data.updateEntry).not.toHaveBeenCalled();

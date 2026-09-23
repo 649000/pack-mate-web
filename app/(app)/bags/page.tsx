@@ -364,7 +364,7 @@ export function BagsView() {
                         )}
                       </div>
 
-                      <div className="flex items-center justify-end gap-1 border-t border-border pt-3">
+                      <div className="mt-auto flex items-center justify-end gap-1 border-t border-border pt-3">
                         <Button
                           variant="outline"
                           size="sm"

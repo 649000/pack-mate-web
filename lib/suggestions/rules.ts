@@ -1,4 +1,5 @@
 import type { ReusableItem } from "../types";
+import { tripLength } from "../trip-status";
 import type { Suggestion, SuggestionContext, SuggestionProvider } from "./types";
 
 const ADAPTER_PATTERN = /\b(adapter|adaptor|converter|plug)\b/i;
@@ -22,12 +23,7 @@ function libraryMatch(
 
 // Inclusive day count when both dates are present, otherwise null.
 export function tripLengthDays(context: SuggestionContext): number | null {
-  const { startDate, endDate } = context.trip;
-  if (!startDate || !endDate) return null;
-  const start = Date.parse(`${startDate}T00:00:00Z`);
-  const end = Date.parse(`${endDate}T00:00:00Z`);
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return null;
-  return Math.floor((end - start) / 86_400_000) + 1;
+  return tripLength(context.trip.startDate, context.trip.endDate)?.days ?? null;
 }
 
 function addAction(context: SuggestionContext, name: string, category: Suggestion["category"]) {

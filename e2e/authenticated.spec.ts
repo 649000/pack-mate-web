@@ -39,6 +39,13 @@ async function openAddDialog(page: Page, tab: RegExp): Promise<void> {
   await page.getByRole("tab", { name: tab }).click();
 }
 
+// Bulk pack/unpack live behind the header's "Bulk actions" menu so they are not
+// triggered by accident.
+async function bulkPack(page: Page, action: RegExp): Promise<void> {
+  await page.getByRole("button", { name: /bulk actions/i }).click();
+  await page.getByRole("menuitem", { name: action }).click();
+}
+
 async function createItem(page: Page, name: string): Promise<void> {
   await page.goto("/items");
   await page.getByRole("button", { name: /add item/i }).click();
@@ -644,6 +651,20 @@ test.describe("authenticated critical path", () => {
     expect(looseMatch.bytes.length).toBe(looseBlank.bytes.length);
   });
 
+  test("edits a trip from its own page", async ({ page }) => {
+    await signUp(page);
+    await createTrip(page, "Japan");
+    await openTrip(page, "Japan");
+
+    await page.getByRole("button", { name: /edit trip/i }).click();
+    await page.getByLabel("Name").fill("Japan 2026");
+    await page.getByLabel("Destination").fill("Osaka");
+    await page.getByRole("button", { name: /save changes/i }).click();
+
+    await expect(page.getByRole("heading", { name: "Japan 2026" })).toBeVisible();
+    await expect(page.getByText("Osaka, Japan")).toBeVisible();
+  });
+
   test("duplicates a trip's packing list into a new trip", async ({ page }) => {
     await signUp(page);
 
@@ -667,11 +688,15 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByLabel("Start date")).toHaveValue("");
     await page.getByLabel("Name").fill("Japan 2027");
     await page.getByLabel("Start date").fill("2027-03-01");
+    await page.getByLabel("End date").fill("2027-03-10");
     await page.getByRole("button", { name: /create copy/i }).click();
 
     // The copy lands open with the same item, unpacked, and the new fields.
     await expect(page).toHaveURL(/\/trip\?id=/);
     await expect(page.getByRole("heading", { name: "Japan 2027" })).toBeVisible();
+    // The header surfaces the trip's own dates and countdown.
+    await expect(page.getByText("1 Mar 2027 – 10 Mar 2027")).toBeVisible();
+    await expect(page.getByText(/10 days \(9 nights\)/)).toBeVisible();
     await expect(
       page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
     ).toBeVisible();
@@ -693,7 +718,7 @@ test.describe("authenticated critical path", () => {
     }
 
     // Pack all in one action.
-    await page.getByRole("button", { name: /^pack all/i }).click();
+    await bulkPack(page, /^pack all/i);
     await expect(page.getByText(/2\/2 packed/i).first()).toBeVisible();
 
     // Undo restores the previous (unpacked) state.
@@ -701,9 +726,9 @@ test.describe("authenticated critical path", () => {
     await expect(page.getByText(/0\/2 packed/i).first()).toBeVisible();
 
     // Pack again, then unpack all.
-    await page.getByRole("button", { name: /^pack all/i }).click();
+    await bulkPack(page, /^pack all/i);
     await expect(page.getByText(/2\/2 packed/i).first()).toBeVisible();
-    await page.getByRole("button", { name: /^unpack all/i }).click();
+    await bulkPack(page, /^unpack all/i);
     await expect(page.getByText(/0\/2 packed/i).first()).toBeVisible();
   });
 

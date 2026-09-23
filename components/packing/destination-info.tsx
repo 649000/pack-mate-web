@@ -68,10 +68,12 @@ export function DestinationInfo({
   countryCode,
   destination,
   startDate,
+  className,
 }: {
   countryCode: string;
   destination: string | null;
   startDate: string | null;
+  className?: string;
 }) {
   const [loaded, setLoaded] = useState<{
     countryCode: string;
@@ -114,7 +116,7 @@ export function DestinationInfo({
   if (!hasContent) return null;
 
   return (
-    <Card>
+    <Card className={className}>
       <CardContent className="flex flex-col gap-4 p-4">
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -124,11 +126,6 @@ export function DestinationInfo({
           <CountryFlag code={countryCode} className="h-4 w-6" />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {facts.plug_types.length > 0 || facts.voltage !== null || facts.frequency !== null ? (
-            <Field icon={Plug} label="Power">
-              <PowerValue facts={facts} />
-            </Field>
-          ) : null}
           {currency ? (
             <Field icon={Coins} label="Currency">
               {currency}
@@ -137,6 +134,11 @@ export function DestinationInfo({
           {facts.calling_code ? (
             <Field icon={Phone} label="Calling code">
               {facts.calling_code}
+            </Field>
+          ) : null}
+          {facts.plug_types.length > 0 || facts.voltage !== null || facts.frequency !== null ? (
+            <Field icon={Plug} label="Power">
+              <PowerValue facts={facts} />
             </Field>
           ) : null}
           {timeZones.length > 0 ? (

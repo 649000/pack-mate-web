@@ -59,3 +59,40 @@ export function departureCountdown(
     total: end !== null ? end - start + 1 : null,
   };
 }
+
+// Inclusive trip length in days, plus the number of nights (one fewer). Null
+// unless both dates are present and the end is not before the start.
+export function tripLength(
+  startDate: string | null,
+  endDate: string | null,
+): { days: number; nights: number } | null {
+  if (!startDate || !endDate) return null;
+  const start = parseCalendarDay(startDate);
+  const end = parseCalendarDay(endDate);
+  if (start === null || end === null || end < start) return null;
+  const days = end - start + 1;
+  return { days, nights: days - 1 };
+}
+
+// Fixed to UTC so a `YYYY-MM-DD` trip date renders as the day the user picked,
+// regardless of the viewer's time zone.
+const tripDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+function formatCalendarDay(value: string): string | null {
+  const day = parseCalendarDay(value);
+  if (day === null) return null;
+  return tripDateFormatter.format(new Date(day * DAY_MS));
+}
+
+// Human date range for a trip header, e.g. "12 Oct 2025 – 19 Oct 2025".
+export function formatTripDates(startDate: string | null, endDate: string | null): string | null {
+  const start = startDate ? formatCalendarDay(startDate) : null;
+  const end = endDate ? formatCalendarDay(endDate) : null;
+  if (start && end) return `${start} – ${end}`;
+  return start ?? end;
+}

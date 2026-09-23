@@ -28,18 +28,26 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  CalendarDays,
   ChevronDown,
   ChevronUp,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ClipboardList,
   Copy,
+  Download,
+  Ellipsis,
   GripVertical,
   Hand,
   Luggage,
   PackageOpen,
   PackageCheck,
   Pencil,
+  PlaneTakeoff,
   Plus,
+  Scale,
   SearchX,
+  Share2,
   Trash2,
   Weight,
 } from "lucide-react";
@@ -62,7 +70,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input, inputVariants } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -90,6 +104,7 @@ import {
   setEntryLocation,
   setTripPacked,
   updateEntry,
+  updateTrip,
 } from "@/lib/data";
 import {
   bagDescendantIds,
@@ -136,14 +151,15 @@ import {
 } from "@/lib/weight";
 import { WeightSummary } from "@/components/packing/weight-summary";
 import { CategoryBadge } from "@/components/packing/category-badge";
-import { CategoryFilterChips } from "@/components/packing/category-filter-chips";
+import { CategoryFilterSelect } from "@/components/packing/category-filter-chips";
 import { PackedFilterChips } from "@/components/packing/packed-filter-chips";
-import { TripCountdown } from "@/components/packing/trip-countdown";
+import { countdownLabel } from "@/components/packing/trip-countdown";
 import { DestinationInfo } from "@/components/packing/destination-info";
 import { SuggestedItems } from "@/components/packing/suggested-items";
 import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import { ExportPdfDialog } from "@/components/packing/export-pdf-dialog";
 import { buildTripPdfViewModel } from "@/lib/pdf";
+import { departureCountdown, formatTripDates, tripLength } from "@/lib/trip-status";
 import {
   buildShareUrl,
   SHARE_EXPIRY_OPTIONS,
@@ -153,10 +169,19 @@ import {
 import { BAG_ICONS, resolveBagIconKey } from "@/lib/bag-icons";
 import { cn } from "@/lib/utils";
 
+// Remembers whether the weight-by-category card was opened, so it stays open
+// across refreshes once the user has chosen to see it.
+const WEIGHT_OPEN_KEY = "packmate:trip-weight-open";
+
+// A broadcast from the "expand all" control. Bumping `version` re-applies `open`
+// to every entry row, overriding any per-row toggle.
+type ExpandAll = { open: boolean; version: number };
+
 function SortableEntry({
   entry,
   bags,
   unit,
+  expandAll,
   onTogglePacked,
   onMove,
   onChangeQty,
@@ -166,6 +191,7 @@ function SortableEntry({
   entry: TripEntry;
   bags: TripBag[];
   unit: DisplayWeightUnit;
+  expandAll: ExpandAll;
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
   onChangeQty: (entry: TripEntry, qty: number) => void;
@@ -175,7 +201,9 @@ function SortableEntry({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
   });
-  const [expanded, setExpanded] = useState(false);
+  // A per-row toggle only wins until the next "expand all" broadcast.
+  const [override, setOverride] = useState<{ version: number; open: boolean } | null>(null);
+  const expanded = override?.version === expandAll.version ? override.open : expandAll.open;
   const hasDetails = Boolean(entry.description || entry.link || entry.image_url);
   const locationPath = entryLocationPath(entry, bags);
   const nestedPath = locationPath.includes(" > ") ? locationPath : null;
@@ -268,7 +296,7 @@ function SortableEntry({
                 aria-label={
                   expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
                 }
-                onClick={() => setExpanded((current) => !current)}
+                onClick={() => setOverride({ version: expandAll.version, open: !expanded })}
               >
                 {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
               </Button>
@@ -314,6 +342,7 @@ function EntryGroup({
   weight,
   limitGrams,
   headerActions,
+  expandAll,
   onTogglePacked,
   onMove,
   onChangeQty,
@@ -329,6 +358,7 @@ function EntryGroup({
   weight?: WeightTotal;
   limitGrams?: number | null;
   headerActions?: ReactNode;
+  expandAll: ExpandAll;
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
   onChangeQty: (entry: TripEntry, qty: number) => void;
@@ -348,21 +378,34 @@ function EntryGroup({
   }
 
   return (
-    <section aria-label={title} className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-2 px-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Icon className="size-3.5" aria-hidden="true" />
-        </span>
-        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-        <span className="text-xs text-muted-foreground">
-          {entries.filter((entry) => entry.is_packed).length}/{entries.length} packed
-        </span>
-        {weight ? (
-          <WeightSummary weight={weight} limitGrams={limitGrams ?? null} unit={unit} />
+    <section
+      aria-label={title}
+      className="overflow-hidden rounded-xl border border-border bg-card shadow-elevation-1"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background text-primary ring-1 ring-border">
+            <Icon className="size-5" aria-hidden="true" />
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <h3 className="truncate font-heading text-base font-semibold text-foreground">
+              {title}
+            </h3>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+              <span>
+                {entries.filter((entry) => entry.is_packed).length}/{entries.length} packed
+              </span>
+              {weight ? (
+                <WeightSummary weight={weight} limitGrams={limitGrams ?? null} unit={unit} />
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {headerActions ? (
+          <div className="flex flex-wrap items-center gap-2">{headerActions}</div>
         ) : null}
-        {headerActions ? <span className="ms-auto">{headerActions}</span> : null}
       </div>
-      <div className="divide-y divide-border">
+      <div className="flex flex-col gap-1 p-2">
         {entries.length === 0 ? (
           <p className="px-2 py-3 text-xs text-muted-foreground">Nothing here yet.</p>
         ) : (
@@ -381,6 +424,7 @@ function EntryGroup({
                   entry={entry}
                   bags={bags}
                   unit={unit}
+                  expandAll={expandAll}
                   onTogglePacked={onTogglePacked}
                   onMove={onMove}
                   onChangeQty={onChangeQty}
@@ -423,6 +467,7 @@ export function TripView() {
   const [packedFilter, setPackedFilter] = useState<PackedFilter>("all");
   const [unit, setUnit] = useState<DisplayWeightUnit>("kg");
   const [weightOpen, setWeightOpen] = useState(false);
+  const [expandAll, setExpandAll] = useState<ExpandAll>({ open: false, version: 0 });
   const [detailEntry, setDetailEntry] = useState<TripEntry | null>(null);
   const [detailDescription, setDetailDescription] = useState("");
   const [detailLink, setDetailLink] = useState("");
@@ -443,6 +488,7 @@ export function TripView() {
   const [duplicateStart, setDuplicateStart] = useState("");
   const [duplicateEnd, setDuplicateEnd] = useState("");
   const [duplicating, setDuplicating] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
 
   function openAdd(mode: "item" | "bag" | "oneoff") {
@@ -545,6 +591,29 @@ export function TripView() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    try {
+      // Restoring the persisted open state on mount is the intended result; the
+      // card can only be server-rendered closed, so this must run after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (localStorage.getItem(WEIGHT_OPEN_KEY) === "true") setWeightOpen(true);
+    } catch {
+      // Storage can be unavailable; the card simply stays closed by default.
+    }
+  }, []);
+
+  function toggleWeight() {
+    setWeightOpen((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(WEIGHT_OPEN_KEY, String(next));
+      } catch {
+        // Ignore storage failures; the toggle still works for this session.
+      }
+      return next;
+    });
+  }
+
   const progress = useMemo(() => packingProgress(entries), [entries]);
   const entryCountLabel = `${progress.total} ${progress.total === 1 ? "item" : "items"}`;
 
@@ -566,6 +635,11 @@ export function TripView() {
   } = useMemo(() => groupEntries(filteredEntries, bags), [filteredEntries, bags]);
 
   const categoryBreakdown = useMemo(() => weightByCategory(entries), [entries]);
+
+  const hasAnyDetails = useMemo(
+    () => entries.some((entry) => entry.description || entry.link || entry.image_url),
+    [entries],
+  );
 
   const baggageTotal = useMemo(() => tripBaggageTotal(bags, entries), [bags, entries]);
 
@@ -738,21 +812,25 @@ export function TripView() {
             unit={unit}
             weight={sumBagWeight(node.bag, bags, entries)}
             limitGrams={node.bag.weight_limit_grams}
+            expandAll={expandAll}
             headerActions={
               bags.length > 1 ? (
-                <select
-                  aria-label={`Parent bag for ${node.bag.name}`}
-                  className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                  value={node.bag.parent_bag_id ?? ""}
-                  onChange={(event) => handleMoveBag(node.bag, event.target.value || null)}
-                >
-                  <option value="">Top level</option>
-                  {eligibleParents.map((candidate) => (
-                    <option key={candidate.id} value={candidate.id}>
-                      {candidate.name}
-                    </option>
-                  ))}
-                </select>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="hidden sm:inline">Nested inside</span>
+                  <select
+                    aria-label={`Parent bag for ${node.bag.name}`}
+                    className="h-7 rounded-md border border-input bg-background px-2 text-xs"
+                    value={node.bag.parent_bag_id ?? ""}
+                    onChange={(event) => handleMoveBag(node.bag, event.target.value || null)}
+                  >
+                    <option value="">No bag</option>
+                    {eligibleParents.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.name}
+                      </option>
+                    ))}
+                  </select>
+                </span>
               ) : null
             }
             onTogglePacked={handleTogglePacked}
@@ -808,11 +886,23 @@ export function TripView() {
   function openDuplicate() {
     if (!trip) return;
     const defaults = duplicateTripDefaults(trip);
+    setEditingTrip(false);
     setDuplicateName(defaults.name);
     setDuplicateDestination(defaults.destination ?? "");
     setDuplicateCountry(defaults.countryCode);
     setDuplicateStart(defaults.startDate ?? "");
     setDuplicateEnd(defaults.endDate ?? "");
+    setDuplicateOpen(true);
+  }
+
+  function openEditTrip() {
+    if (!trip) return;
+    setEditingTrip(true);
+    setDuplicateName(trip.name);
+    setDuplicateDestination(trip.destination ?? "");
+    setDuplicateCountry(trip.country_code);
+    setDuplicateStart(trip.start_date ?? "");
+    setDuplicateEnd(trip.end_date ?? "");
     setDuplicateOpen(true);
   }
 
@@ -825,18 +915,32 @@ export function TripView() {
     }
     setDuplicating(true);
     try {
-      const newTrip = await duplicateTrip(trip.id, {
+      const payload = {
         name: validateName(duplicateName, "Trip name"),
         destination: duplicateDestination.trim() || null,
         countryCode: duplicateCountry,
         startDate: duplicateStart || null,
         endDate: duplicateEnd || null,
-      });
-      setDuplicateOpen(false);
-      toast.success("Trip duplicated");
-      router.push(`/trip?id=${newTrip.id}`);
+      };
+      if (editingTrip) {
+        await updateTrip(trip.id, payload);
+        setDuplicateOpen(false);
+        toast.success("Trip updated");
+        await refresh();
+      } else {
+        const newTrip = await duplicateTrip(trip.id, payload);
+        setDuplicateOpen(false);
+        toast.success("Trip duplicated");
+        router.push(`/trip?id=${newTrip.id}`);
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to duplicate trip");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : editingTrip
+            ? "Failed to update trip"
+            : "Failed to duplicate trip",
+      );
     } finally {
       setDuplicating(false);
     }
@@ -861,11 +965,54 @@ export function TripView() {
     );
   }
 
+  const countdown = departureCountdown(trip.start_date, trip.end_date);
+  const countdownText = countdownLabel(countdown);
+  const dateRange = formatTripDates(trip.start_date, trip.end_date);
+  const length = tripLength(trip.start_date, trip.end_date);
+  const status =
+    countdown.kind === "inProgress"
+      ? ({ label: "In progress", tone: "packed" } as const)
+      : countdown.kind === "ended"
+        ? ({ label: "Completed", tone: "pending" } as const)
+        : countdown.kind === "none"
+          ? null
+          : ({ label: "Upcoming", tone: "withMe" } as const);
+
   return (
     <div className="flex flex-col gap-7">
       <PageHeader
         title={trip.name}
         titleAddon={<CountryFlag code={trip.country_code} className="h-6 w-8" />}
+        meta={
+          status || dateRange || countdownText ? (
+            <>
+              {status ? <StatusChip status={status.tone}>{status.label}</StatusChip> : null}
+              {dateRange ? (
+                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <CalendarDays className="size-4 text-primary" aria-hidden="true" />
+                  {dateRange}
+                  {length ? (
+                    <span>
+                      · {length.days} {length.days === 1 ? "day" : "days"}
+                      {length.nights > 0
+                        ? ` (${length.nights} ${length.nights === 1 ? "night" : "nights"})`
+                        : ""}
+                    </span>
+                  ) : null}
+                </span>
+              ) : null}
+              {countdownText ? (
+                <span
+                  data-testid="trip-countdown"
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground"
+                >
+                  <PlaneTakeoff className="size-4 text-secondary" aria-hidden="true" />
+                  {countdownText}
+                </span>
+              ) : null}
+            </>
+          ) : undefined
+        }
         description={formatDestination(trip.destination, trip.country_code) ?? undefined}
         breadcrumb={[
           { label: "Packing" },
@@ -873,82 +1020,176 @@ export function TripView() {
           { label: trip.name },
         ]}
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            aria-label="Switch weight unit"
-            onClick={() => setUnit(unit === "kg" ? "lb" : "kg")}
-          >
-            {unit}
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={openDuplicate}>
-            <Copy aria-hidden="true" />
-            Duplicate
-          </Button>
-          <Button type="button" size="sm" onClick={openShare}>
-            Share
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setPdfOpen(true)}>
-            Download PDF
-          </Button>
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-0.5 shadow-xs">
+          <RecordAction icon={Pencil} label="Edit trip" onClick={openEditTrip} />
+          <RecordAction icon={Copy} label="Duplicate" onClick={openDuplicate} />
+          <RecordAction icon={Share2} label="Share" onClick={openShare} />
+          <RecordAction icon={Download} label="Download PDF" onClick={() => setPdfOpen(true)} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                mode="icon"
+                size="sm"
+                aria-label="Bulk actions"
+                disabled={progress.total === 0}
+              >
+                <Ellipsis aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                disabled={bulkBusy || progress.total === 0 || progress.packed === progress.total}
+                onSelect={() => void handleBulkPacked(true)}
+              >
+                <PackageCheck aria-hidden="true" />
+                Pack all {entryCountLabel}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={bulkBusy || progress.total === 0 || progress.packed === 0}
+                onSelect={() => void handleBulkPacked(false)}
+              >
+                <PackageOpen aria-hidden="true" />
+                Unpack all {entryCountLabel}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </PageHeader>
 
-      <Card>
-        <CardContent className="flex items-center gap-4 p-5">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <PackageCheck className="size-5" aria-hidden="true" />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
-              <span className="font-medium text-foreground">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <Card className="lg:col-span-7">
+          <CardContent className="flex h-full flex-col justify-between gap-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                <PackageCheck className="size-5 text-primary" aria-hidden="true" />
+                Packing progress
+              </span>
+              <span className="font-mono text-lg font-semibold tabular-nums text-foreground">
                 {progress.packed}/{progress.total} packed
               </span>
-              <span className="text-muted-foreground">
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Progress
+                value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
+                className="h-3 w-full"
+              />
+              <div className="flex items-center justify-between font-mono text-xs text-muted-foreground tabular-nums">
+                <span>0</span>
+                <span>{progress.packed} packed</span>
+                <span>{progress.total - progress.packed} to pack</span>
+                <span>{progress.total} items</span>
+              </div>
+            </div>
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <span>
                 Total {formatWeight(baggageTotal.grams, unit)}
                 {baggageTotal.complete ? "" : " (incomplete)"}
               </span>
-            </div>
-            <TripCountdown
-              startDate={trip.start_date}
-              endDate={trip.end_date}
-              className="text-xs text-muted-foreground"
-            />
-            <Progress
-              value={progress.total === 0 ? 0 : (progress.packed / progress.total) * 100}
-              className="h-1.5 w-full"
-            />
-            <div className="flex flex-wrap gap-2 pt-1">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => void handleBulkPacked(true)}
-                disabled={bulkBusy || progress.total === 0 || progress.packed === progress.total}
+                className="size-6 p-0"
+                aria-label="Switch weight unit"
+                onClick={() => setUnit(unit === "kg" ? "lb" : "kg")}
               >
-                Pack all {entryCountLabel}
+                <Scale aria-hidden="true" />
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void handleBulkPacked(false)}
-                disabled={bulkBusy || progress.total === 0 || progress.packed === 0}
-              >
-                Unpack all {entryCountLabel}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </span>
+          </CardContent>
+        </Card>
 
-      <DestinationInfo
-        countryCode={trip.country_code}
-        destination={trip.destination}
-        startDate={trip.start_date}
-      />
+        <DestinationInfo
+          countryCode={trip.country_code}
+          destination={trip.destination}
+          startDate={trip.start_date}
+          className="lg:col-span-5"
+        />
+      </div>
+
+      {entries.length > 0 ? (
+        <Card>
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-2 px-5 py-3.5 text-sm font-medium text-foreground"
+            aria-expanded={weightOpen}
+            onClick={toggleWeight}
+          >
+            <Weight className="size-4 text-muted-foreground" aria-hidden="true" />
+            Weight by category
+            <ChevronDown
+              className={cn(
+                "ms-auto size-4 text-muted-foreground transition-transform",
+                weightOpen && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </button>
+          {weightOpen ? (
+            <CardContent className="border-t border-border pt-4">
+              <WeightByCategoryChart rows={categoryBreakdown} unit={unit} />
+            </CardContent>
+          ) : null}
+        </Card>
+      ) : null}
+
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardContent className="flex flex-wrap items-center gap-2 p-4">
+            {entries.length > 0 ? (
+              <>
+                <PackedFilterChips
+                  value={packedFilter}
+                  onChange={setPackedFilter}
+                  counts={{
+                    total: progress.total,
+                    packed: progress.packed,
+                    unpacked: progress.total - progress.packed,
+                  }}
+                />
+                <CategoryFilterSelect
+                  entries={entries}
+                  value={categoryFilter}
+                  onChange={setCategoryFilter}
+                  label="Filter entries by category"
+                  className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+                />
+              </>
+            ) : (
+              <span className="text-sm text-muted-foreground">No items to filter yet.</span>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-1">
+          <CardContent className="flex items-center gap-2 p-4">
+            <ListSearchToolbar
+              id="trip-search"
+              label="Search items"
+              value={search}
+              onChange={setSearch}
+              placeholder="Search this list"
+            />
+            <div className="ms-auto flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-xs">
+              {hasAnyDetails ? (
+                <RecordAction
+                  icon={expandAll.open ? ChevronsDownUp : ChevronsUpDown}
+                  label={expandAll.open ? "Collapse all" : "Expand all"}
+                  onClick={() =>
+                    setExpandAll((current) => ({
+                      open: !current.open,
+                      version: current.version + 1,
+                    }))
+                  }
+                />
+              ) : null}
+              <RecordAction icon={Plus} label="Add to trip" onClick={() => openAdd("item")} />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <SuggestedItems
         trip={trip}
@@ -956,37 +1197,6 @@ export function TripView() {
         libraryItems={libraryItems}
         onChanged={refresh}
       />
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={() => openAdd("item")}>
-              <Plus aria-hidden="true" />
-              Add to trip
-            </Button>
-            <div className="min-w-48 flex-1">
-              <ListSearchToolbar
-                id="trip-search"
-                label="Search items"
-                value={search}
-                onChange={setSearch}
-                placeholder="Search this list"
-              />
-            </div>
-          </div>
-          {entries.length > 0 ? (
-            <CategoryFilterChips
-              entries={entries}
-              value={categoryFilter}
-              onChange={setCategoryFilter}
-              label="Filter entries by category"
-            />
-          ) : null}
-          {entries.length > 0 ? (
-            <PackedFilterChips value={packedFilter} onChange={setPackedFilter} />
-          ) : null}
-        </CardContent>
-      </Card>
 
       {search.trim() && filteredEntries.length === 0 ? (
         <EmptyState
@@ -1057,6 +1267,7 @@ export function TripView() {
             entries={withMeEntries}
             bags={bags}
             unit={unit}
+            expandAll={expandAll}
             onTogglePacked={handleTogglePacked}
             onMove={handleMove}
             onChangeQty={handleChangeQty}
@@ -1070,6 +1281,7 @@ export function TripView() {
             entries={looseEntries}
             bags={bags}
             unit={unit}
+            expandAll={expandAll}
             onTogglePacked={handleTogglePacked}
             onMove={handleMove}
             onChangeQty={handleChangeQty}
@@ -1079,32 +1291,6 @@ export function TripView() {
           />
         </div>
       )}
-
-      {entries.length > 0 ? (
-        <Card>
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center gap-2 px-5 py-3.5 text-sm font-medium text-foreground"
-            aria-expanded={weightOpen}
-            onClick={() => setWeightOpen((current) => !current)}
-          >
-            <Weight className="size-4 text-muted-foreground" aria-hidden="true" />
-            Weight by category
-            <ChevronDown
-              className={cn(
-                "ms-auto size-4 text-muted-foreground transition-transform",
-                weightOpen && "rotate-180",
-              )}
-              aria-hidden="true"
-            />
-          </button>
-          {weightOpen ? (
-            <CardContent className="border-t border-border pt-4">
-              <WeightByCategoryChart rows={categoryBreakdown} unit={unit} />
-            </CardContent>
-          ) : null}
-        </Card>
-      ) : null}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
@@ -1378,10 +1564,11 @@ export function TripView() {
         <DialogContent>
           <form onSubmit={handleDuplicate}>
             <DialogHeader>
-              <DialogTitle>Duplicate trip</DialogTitle>
+              <DialogTitle>{editingTrip ? "Edit trip" : "Duplicate trip"}</DialogTitle>
               <DialogDescription>
-                Give the copy a name, a country and dates. It starts with the same packing list,
-                unpacked.
+                {editingTrip
+                  ? "Update the trip's name, country and dates."
+                  : "Give the copy a name, a country and dates. It starts with the same packing list, unpacked."}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4 py-4">
@@ -1445,7 +1632,13 @@ export function TripView() {
                 Cancel
               </Button>
               <Button type="submit" disabled={duplicating}>
-                {duplicating ? "Duplicating..." : "Create copy"}
+                {duplicating
+                  ? editingTrip
+                    ? "Saving..."
+                    : "Duplicating..."
+                  : editingTrip
+                    ? "Save changes"
+                    : "Create copy"}
               </Button>
             </DialogFooter>
           </form>

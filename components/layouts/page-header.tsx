@@ -10,12 +10,14 @@ export interface BreadcrumbItem {
 export function PageHeader({
   title,
   titleAddon,
+  meta,
   description,
   breadcrumb,
   children,
 }: {
   title: string;
   titleAddon?: ReactNode;
+  meta?: ReactNode;
   description?: string;
   breadcrumb?: BreadcrumbItem[];
   children?: ReactNode;
@@ -46,6 +48,7 @@ export function PageHeader({
           {titleAddon}
           {title}
         </h1>
+        {meta ? <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">{meta}</div> : null}
         {description && (
           <p className="max-w-2xl text-sm font-normal text-muted-foreground">{description}</p>
         )}

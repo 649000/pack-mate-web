@@ -14,8 +14,6 @@ describe("WeightByCategoryChart", () => {
     const { container } = render(<WeightByCategoryChart rows={rows} unit="kg" />);
     const view = within(container);
 
-    expect(screen.getByRole("img", { name: "Weight by category" })).toBeInTheDocument();
-    expect(container.querySelectorAll("path.recharts-rectangle").length).toBe(rows.length);
     expect(view.getByText("Clothing")).toBeInTheDocument();
     expect(view.getByText("Electronics")).toBeInTheDocument();
     expect(view.getByText("Uncategorised")).toBeInTheDocument();

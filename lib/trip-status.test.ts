@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { departureCountdown } from "./trip-status";
+import { departureCountdown, formatTripDates, tripLength } from "./trip-status";
 
 // The countdown is deliberately local-calendar. Run this file at a negative
 // UTC offset so an implementation that used the UTC day would be caught.
@@ -79,5 +79,38 @@ describe("departureCountdown", () => {
       day: 3,
       total: null,
     });
+  });
+});
+
+describe("tripLength", () => {
+  it("counts inclusive days and the nights between them", () => {
+    expect(tripLength("2025-10-12", "2025-10-19")).toEqual({ days: 8, nights: 7 });
+  });
+
+  it("reports a single-day trip with no nights", () => {
+    expect(tripLength("2025-10-12", "2025-10-12")).toEqual({ days: 1, nights: 0 });
+  });
+
+  it("returns null unless both dates are valid and ordered", () => {
+    expect(tripLength("2025-10-12", null)).toBeNull();
+    expect(tripLength(null, "2025-10-19")).toBeNull();
+    expect(tripLength("2025-10-19", "2025-10-12")).toBeNull();
+    expect(tripLength("not-a-date", "2025-10-19")).toBeNull();
+  });
+});
+
+describe("formatTripDates", () => {
+  it("formats a range in UTC so the picked day is shown", () => {
+    expect(formatTripDates("2025-10-12", "2025-10-19")).toBe("12 Oct 2025 – 19 Oct 2025");
+  });
+
+  it("falls back to whichever single date is present", () => {
+    expect(formatTripDates("2025-10-12", null)).toBe("12 Oct 2025");
+    expect(formatTripDates(null, "2025-10-19")).toBe("19 Oct 2025");
+  });
+
+  it("returns null when there are no usable dates", () => {
+    expect(formatTripDates(null, null)).toBeNull();
+    expect(formatTripDates("nope", "also-nope")).toBeNull();
   });
 });
