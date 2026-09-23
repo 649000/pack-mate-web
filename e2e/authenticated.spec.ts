@@ -62,8 +62,14 @@ async function createTrip(page: Page, name: string, country = "JP"): Promise<voi
 
 async function openTrip(page: Page, name = "Japan"): Promise<void> {
   await page.goto("/trips");
-  await page.getByText(name).click();
+  await tripLink(page, name).click();
   await expect(page).toHaveURL(/\/trip\?id=/);
+}
+
+// A trip card shows the name both as a link and (when the destination is empty)
+// as the country label, so match the name link exactly instead of by text.
+function tripLink(page: Page, name: string) {
+  return page.getByRole("link", { name, exact: true });
 }
 
 // Exports the current trip as a PDF and returns the downloaded bytes. The blank
@@ -92,15 +98,17 @@ test.describe("authenticated critical path", () => {
 
     // Create a trip.
     await createTrip(page, "Japan");
-    await expect(page.getByText("Japan")).toBeVisible();
+    await expect(tripLink(page, "Japan")).toBeVisible();
 
     // Open the trip and add a one-off item.
-    await page.getByText("Japan").click();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
     await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
+    ).toBeVisible();
 
     // Pack it.
     await page.getByRole("checkbox", { name: /mark packed/i }).click();
@@ -196,7 +204,7 @@ test.describe("authenticated critical path", () => {
 
     // Create a trip and add the item to it.
     await createTrip(page, "Japan");
-    await page.getByText("Japan").click();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
     await openAddDialog(page, /library item/i);
@@ -231,11 +239,11 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel(/weight \(kg\)/i).fill("2");
     await page.getByRole("button", { name: /^save$/i }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByText("2.00 kg")).toBeVisible();
+    await expect(page.getByText("2.00 kg").first()).toBeVisible();
 
     // Create a trip, add the bag, and put the item inside it.
     await createTrip(page, "Japan");
-    await page.getByText("Japan").click();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
     await openAddDialog(page, /library bag/i);
@@ -272,7 +280,7 @@ test.describe("authenticated critical path", () => {
 
     // Trip with both bags, the item inside Toiletry.
     await createTrip(page, "Japan");
-    await page.getByText("Japan").click();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
     for (const name of ["Suitcase", "Toiletry"]) {
@@ -314,7 +322,7 @@ test.describe("authenticated critical path", () => {
     await page.setViewportSize({ width: 390, height: 844 });
 
     await createTrip(page, "Japan");
-    await page.getByText("Japan").click();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
 
     // "backpack" and "adapter" are not prefixes of the names, so a match proves
@@ -341,8 +349,8 @@ test.describe("authenticated critical path", () => {
 
     // A trip with one item.
     await createTrip(page, "Japan");
-    await expect(page.getByText("Japan")).toBeVisible();
-    await page.getByText("Japan").click();
+    await expect(tripLink(page, "Japan")).toBeVisible();
+    await tripLink(page, "Japan").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
     // Dev compiles /trip on demand; the URL updates before the route renders.
     await expect(page.getByRole("button", { name: /add to trip/i })).toBeVisible({
@@ -351,7 +359,9 @@ test.describe("authenticated critical path", () => {
     await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
+    ).toBeVisible();
 
     // Create the public link.
     await page.getByRole("button", { name: /^share$/i }).click();
@@ -455,8 +465,13 @@ test.describe("authenticated critical path", () => {
     await page.getByLabel("Search options").fill("tent");
     await page.getByRole("option", { name: "Tent" }).first().click();
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByText("Tent")).toBeVisible();
-    await page.getByRole("button", { name: /^remove$/i }).click();
+    // The picker keeps "Tent" in its own control, so assert on the contents row
+    // (identifiable by its Remove action) rather than the item name alone.
+    await expect(page.getByRole("dialog").getByRole("button", { name: /^remove$/i })).toBeVisible();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^remove$/i })
+      .click();
     await expect(page.getByText(/no default contents yet/i)).toBeVisible();
     await page.getByRole("button", { name: "Close" }).click();
 
@@ -474,15 +489,15 @@ test.describe("authenticated critical path", () => {
 
     // A trip can be renamed.
     await createTrip(page, "Japan");
-    await expect(page.getByText("Japan")).toBeVisible();
+    await expect(tripLink(page, "Japan")).toBeVisible();
     await page.getByRole("button", { name: /^edit$/i }).click();
     await page.getByLabel("Name").fill("Japan 2026");
     await page.getByRole("button", { name: /^save$/i }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByText("Japan 2026")).toBeVisible();
+    await expect(tripLink(page, "Japan 2026")).toBeVisible();
 
     // Publish a link, then manage it from the shared links surface.
-    await page.getByText("Japan 2026").click();
+    await tripLink(page, "Japan 2026").click();
     await expect(page).toHaveURL(/\/trip\?id=/);
     await page.getByRole("button", { name: /^share$/i }).click();
     await page.getByRole("button", { name: /create link/i }).click();
@@ -578,7 +593,9 @@ test.describe("authenticated critical path", () => {
     await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
+    ).toBeVisible();
 
     const { bytes, filename } = await exportPdf(page);
 
@@ -623,7 +640,9 @@ test.describe("authenticated critical path", () => {
     await openAddDialog(page, /one-off item/i);
     await page.getByLabel("Add a one-off item").fill("Passport");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
+    ).toBeVisible();
     await page.getByRole("checkbox", { name: /mark packed/i }).click();
     await expect(page.getByText(/1\/1 packed/i).first()).toBeVisible();
 
@@ -639,7 +658,9 @@ test.describe("authenticated critical path", () => {
     // The copy lands open with the same item, unpacked, and the new fields.
     await expect(page).toHaveURL(/\/trip\?id=/);
     await expect(page.getByRole("heading", { name: "Japan 2027" })).toBeVisible();
-    await expect(page.getByText("Passport")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Not assigned" }).getByText("Passport"),
+    ).toBeVisible();
     await expect(page.getByText(/0\/1 packed/i).first()).toBeVisible();
   });
 
