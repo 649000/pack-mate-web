@@ -2,16 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check } from "lucide-react";
+import { CategoryIcon } from "@/components/packing/category-icon";
 import { Button, ButtonArrow } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { filterByName } from "@/lib/packing";
 import { cn } from "@/lib/utils";
+import type { ItemCategory } from "@/lib/types";
 
 export type LibraryPickerOption = {
   id: string;
   name: string;
   detail?: string;
+  category?: ItemCategory | null;
 };
 
 const MAX_MATCHES = 50;
@@ -160,6 +163,12 @@ export function LibraryPicker({
                     onMouseEnter={() => setActiveIndex(index)}
                     onClick={() => select(option)}
                   >
+                    {option.category !== undefined ? (
+                      <CategoryIcon
+                        category={option.category}
+                        className="size-4 text-muted-foreground"
+                      />
+                    ) : null}
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="truncate">{option.name}</span>
                       {option.detail ? (

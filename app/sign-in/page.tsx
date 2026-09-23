@@ -97,7 +97,7 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace("/trips");
+      router.replace("/dashboard");
     }
   }, [loading, user, router]);
 
@@ -110,7 +110,7 @@ export default function SignInPage() {
       } else {
         await signUp(email, password);
       }
-      router.replace("/trips");
+      router.replace("/dashboard");
     } catch (error) {
       if (error instanceof MfaRequiredError) {
         setMfaResolver(error.resolver);
@@ -132,7 +132,7 @@ export default function SignInPage() {
       if (linkCredential) {
         await linkPendingCredential(linkCredential);
       }
-      router.replace("/trips");
+      router.replace("/dashboard");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Invalid code");
     } finally {
@@ -144,7 +144,7 @@ export default function SignInPage() {
     setSubmitting(true);
     try {
       await signInWithGoogle();
-      router.replace("/trips");
+      router.replace("/dashboard");
     } catch (error) {
       if (isAccountExistsError(error)) {
         const credential = pendingCredentialFrom(error);
@@ -174,7 +174,7 @@ export default function SignInPage() {
     try {
       await signIn(linkEmail, linkPassword);
       await linkPendingCredential(linkCredential);
-      router.replace("/trips");
+      router.replace("/dashboard");
     } catch (error) {
       if (error instanceof MfaRequiredError) {
         setMfaResolver(error.resolver);

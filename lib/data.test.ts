@@ -10,16 +10,18 @@ const mocks = vi.hoisted(() => {
   const update = vi.fn(() => chain);
   const insert = vi.fn(() => chain);
   const upsert = vi.fn(() => chain);
+  const order = vi.fn(() => chain);
   const rpc = vi.fn(() => Promise.resolve(result));
   chain.select = select;
   chain.eq = eq;
   chain.update = update;
   chain.insert = insert;
   chain.upsert = upsert;
+  chain.order = order;
   chain.single = single;
   chain.maybeSingle = maybeSingle;
   const from = vi.fn(() => chain);
-  return { from, upsert, insert, update, eq, select, single, maybeSingle, rpc };
+  return { from, upsert, insert, update, eq, select, single, maybeSingle, order, rpc };
 });
 
 const authState = vi.hoisted(() => ({
@@ -33,6 +35,7 @@ import {
   createBag,
   createItem,
   createTrip,
+  duplicateBag,
   duplicateTrip,
   getProfile,
   setBagParent,
@@ -40,6 +43,7 @@ import {
   updateBag,
   updateEntry,
   updateItem,
+  updateProfileTheme,
   updateTrip,
   upsertProfile,
 } from "./data";
@@ -252,7 +256,30 @@ describe("createBag / updateBag", () => {
     await createBag({ name: "Main", weightLimitGrams: 23000 });
 
     expect(mocks.from).toHaveBeenCalledWith("reusable_bags");
-    expect(mocks.insert).toHaveBeenCalledWith({ name: "Main", weight_limit_grams: 23000 });
+    expect(mocks.insert).toHaveBeenCalledWith({
+      name: "Main",
+      weight_limit_grams: 23000,
+      icon: null,
+    });
+  });
+
+  it("writes a chosen icon", async () => {
+    mocks.single.mockResolvedValue({ data: { id: "b1" }, error: null });
+
+    await createBag({ name: "Camera", icon: "camera" });
+
+    expect(mocks.insert).toHaveBeenCalledWith({
+      name: "Camera",
+      weight_limit_grams: null,
+      icon: "camera",
+    });
+  });
+
+  it("rejects an unknown icon before writing", async () => {
+    await expect(createBag({ name: "Main", icon: "spaceship" as never })).rejects.toThrow(
+      /bag icon/i,
+    );
+    expect(mocks.insert).not.toHaveBeenCalled();
   });
 
   it("rejects a negative limit before writing", async () => {
@@ -267,7 +294,11 @@ describe("createBag / updateBag", () => {
 
     await updateBag("b1", { name: "Main", weightLimitGrams: null });
 
-    expect(mocks.update).toHaveBeenCalledWith({ name: "Main", weight_limit_grams: null });
+    expect(mocks.update).toHaveBeenCalledWith({
+      name: "Main",
+      weight_limit_grams: null,
+      icon: null,
+    });
   });
 });
 
@@ -280,6 +311,7 @@ describe("setBagParent", () => {
     position: 0,
     weight_limit_grams: null,
     parent_bag_id: null,
+    icon: null,
   };
   const parent: TripBag = { ...bag, id: "b0", name: "Suitcase" };
 
@@ -511,5 +543,48 @@ describe("setTripPacked", () => {
     mocks.rpc.mockResolvedValue({ data: null, error: { message: "trip not found" } });
 
     await expect(setTripPacked("t1", false)).rejects.toThrow("trip not found");
+  });
+});
+
+describe("updateProfileTheme", () => {
+  it("writes only the theme and updated_at", async () => {
+    await updateProfileTheme("dark");
+
+    expect(mocks.from).toHaveBeenCalledWith("profiles");
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: "u1", theme: "dark" }),
+      { onConflict: "user_id" },
+    );
+  });
+
+  it("rejects an unknown theme before writing", async () => {
+    await expect(updateProfileTheme("sepia" as never)).rejects.toThrow(/theme/i);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("requires a signed-in user", async () => {
+    authState.currentUser = null;
+    await expect(updateProfileTheme("dark")).rejects.toThrow(/signed in/i);
+  });
+});
+
+describe("duplicateBag", () => {
+  it("duplicates through the database function and returns the copy", async () => {
+    mocks.rpc.mockResolvedValue({ data: "b2", error: null });
+    mocks.single.mockResolvedValue({
+      data: { id: "b2", name: "Main (copy)" },
+      error: null,
+    });
+
+    const copy = await duplicateBag("b1");
+
+    expect(mocks.rpc).toHaveBeenCalledWith("duplicate_bag", { p_bag_id: "b1" });
+    expect(copy).toEqual({ id: "b2", name: "Main (copy)" });
+  });
+
+  it("surfaces an RPC error", async () => {
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "bag not found" } });
+
+    await expect(duplicateBag("b1")).rejects.toThrow("bag not found");
   });
 });

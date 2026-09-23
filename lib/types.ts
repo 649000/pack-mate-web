@@ -1,3 +1,5 @@
+import type { BagIcon } from "./bag-icons";
+
 export type ItemCategory =
   | "documents"
   | "valuables"
@@ -38,6 +40,7 @@ export type ReusableBag = {
   user_id: string;
   name: string;
   weight_limit_grams: number | null;
+  icon: BagIcon | null;
   created_at: string;
 };
 
@@ -81,6 +84,7 @@ export type TripBag = {
   position: number;
   weight_limit_grams: number | null;
   parent_bag_id: string | null;
+  icon: BagIcon | null;
 };
 
 export type TripEntry = {
@@ -108,7 +112,7 @@ export type TripEntryLocation =
 // and library identifiers.
 export type BagLike = Pick<
   TripBag,
-  "id" | "name" | "parent_bag_id" | "position" | "weight_limit_grams"
+  "id" | "name" | "parent_bag_id" | "position" | "weight_limit_grams" | "icon"
 >;
 
 export type EntryLike = Pick<
@@ -159,12 +163,15 @@ export type Gender = "female" | "male" | "other" | "prefer_not_to_say";
 
 export type DisplayWeightUnit = "kg" | "lb";
 
+export type ProfileTheme = "light" | "dark";
+
 export type UserProfile = {
   user_id: string;
   display_name: string | null;
   birthday: string | null;
   gender: Gender | null;
   weight_unit: DisplayWeightUnit;
+  theme: ProfileTheme;
   created_at: string;
   updated_at: string;
 };

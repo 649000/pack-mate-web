@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReusableItem } from "@/lib/types";
+import type { ReusableItem, Trip } from "@/lib/types";
 
 const params = vi.hoisted(() => ({ current: "" }));
 
@@ -16,6 +16,8 @@ vi.mock("@/lib/data", () => ({
   createItem: vi.fn(),
   updateItem: vi.fn(),
   deleteItem: vi.fn(),
+  listTrips: vi.fn(),
+  addLibraryItemToTrip: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -38,10 +40,22 @@ const item: ReusableItem = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
+const trip: Trip = {
+  id: "t1",
+  user_id: "u1",
+  name: "Japan",
+  destination: null,
+  country_code: "JP",
+  start_date: null,
+  end_date: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   params.current = "";
   vi.mocked(data.getProfile).mockResolvedValue(null);
+  vi.mocked(data.listTrips).mockResolvedValue([]);
 });
 
 describe("ItemsView", () => {
@@ -66,6 +80,43 @@ describe("ItemsView", () => {
     expect(within(row as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
+  it("adds a library item to a trip", async () => {
+    vi.mocked(data.listItems).mockResolvedValue([item]);
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    vi.mocked(data.addLibraryItemToTrip).mockResolvedValue("e1");
+    const user = userEvent.setup();
+    render(<ItemsView />);
+
+    await screen.findByText("Passport");
+    await user.click(screen.getByRole("button", { name: "Add to trip" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /add to trip/i }));
+
+    await waitFor(() => expect(data.addLibraryItemToTrip).toHaveBeenCalledWith("t1", "i1", null));
+  });
+
+  it("paginates a large library", async () => {
+    const items = Array.from({ length: 25 }, (_, index) => ({
+      ...item,
+      id: `i${index}`,
+      name: `Item ${String(index + 1).padStart(2, "0")}`,
+    }));
+    vi.mocked(data.listItems).mockResolvedValue(items);
+    const user = userEvent.setup();
+    render(<ItemsView />);
+
+    expect(await screen.findByText("Item 01")).toBeInTheDocument();
+    expect(screen.queryByText("Item 21")).not.toBeInTheDocument();
+    expect(screen.getByText(/page 1 of 2/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(await screen.findByText("Item 21")).toBeInTheDocument();
+    expect(screen.queryByText("Item 01")).not.toBeInTheDocument();
+    expect(screen.getByText(/page 2 of 2/i)).toBeInTheDocument();
+  });
+
   it("shows an item's description, link, image and weight", async () => {
     vi.mocked(data.listItems).mockResolvedValue([
       {
@@ -84,7 +135,8 @@ describe("ItemsView", () => {
       "https://example.com/passport",
     );
     expect(screen.getByAltText("Passport")).toBeInTheDocument();
-    expect(screen.getByText("1.20 kg")).toBeInTheDocument();
+    const itemRow = screen.getByText("Passport").closest("tr");
+    expect(within(itemRow as HTMLElement).getByText("1.20 kg")).toBeInTheDocument();
   });
 
   it("creates an item from the dialog", async () => {
@@ -146,6 +198,7 @@ describe("ItemsView", () => {
       birthday: null,
       gender: null,
       weight_unit: "lb",
+      theme: "light",
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     });

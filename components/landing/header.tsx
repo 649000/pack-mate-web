@@ -1,181 +1,142 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Menu } from "lucide-react";
-import { RainbowButton } from "@/components/landing/magicui/rainbow-button";
-import { Drawer, DrawerTitle, DrawerContent, DrawerTrigger } from "@/components/landing/ui/drawer";
+import Link from "next/link";
+import { Menu, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+
+import { Button } from "@/components/landing/ui/button";
+import { Drawer, DrawerContent, DrawerTitle, DrawerTrigger } from "@/components/landing/ui/drawer";
 import Logo from "@/components/landing/logo";
 import { cn } from "@/lib/utils";
 import { useIsMounted } from "@/lib/use-mounted";
-import { useTheme } from "next-themes";
-import { Sun, Moon } from "lucide-react";
-import Link from "next/link";
-import { Button } from "@/components/landing/ui/button";
+
+const navItems = [
+  { label: "Features", href: "#features" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Compare", href: "#compare" },
+];
 
 const Header = () => {
-  const navItems = ["Home", "Features", "Pricing", "FAQ", "Contact"];
-
   const { resolvedTheme, setTheme } = useTheme();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState("home");
   const mounted = useIsMounted();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+    const handleScroll = () => setIsScrolled(window.scrollY > 24);
 
-      // Always set 'home' as active when at the very top
-      if (window.scrollY < 50) {
-        setActiveSection("home");
-        return;
-      }
-
-      // Track active section based on scroll position
-      const sections = ["features", "how-it-works", "pricing", "faq", "contact"];
-      const scrollPosition = window.scrollY + 200;
-      for (const section of sections) {
-        const element = document.getElementById(section);
-        if (element) {
-          const { offsetTop, offsetHeight } = element;
-          if (scrollPosition >= offsetTop && scrollPosition < offsetTop + offsetHeight) {
-            if (activeSection !== section) setActiveSection(section);
-            return;
-          }
-        }
-      }
-      // Do not update activeSection if not at top and not in any section (last matched section stays active)
-    };
-
-    window.addEventListener("scroll", handleScroll);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [activeSection]);
+  }, []);
 
-  const handleNavClick = (item: string) => {
+  const handleNavClick = (href: string) => {
     setIsOpen(false);
-    if (item === "Home") {
-      // Scroll to top of page for Home link
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-    } else {
-      const targetId = item.toLowerCase().replace(" ", "-");
-      const element = document.getElementById(targetId);
-      if (element) {
-        element.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }
+    const element = document.querySelector(href);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  };
-
-  const isActiveItem = (item: string) => {
-    const sectionMap: { [key: string]: string } = {
-      Home: "home",
-      Features: "features",
-      Pricing: "pricing",
-      FAQ: "faq",
-      Contact: "contact",
-    };
-    return activeSection === sectionMap[item];
   };
 
   return (
     <motion.header
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
+      initial={{ y: -24, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className={cn(
-        "fixed top-0 left-0 right-0 z-40 transition-all duration-300",
-        isScrolled ? "bg-background/60 backdrop-blur-sm shadow-xs" : "bg-transparent",
+        "fixed inset-x-0 top-0 z-40 transition-colors duration-300",
+        isScrolled
+          ? "border-b border-border/60 bg-background/80 backdrop-blur-md"
+          : "bg-transparent",
       )}
     >
-      <div className={cn("container mx-auto px-6 py-4 flex items-center justify-between")}>
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Logo />
 
-        <div className="flex items-center gap-2.5">
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            {/* Nav items */}
-            {navItems.map((item, index) => (
-              <motion.button
-                key={item}
-                onClick={() => handleNavClick(item)}
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: (index + 2) * 0.1 }}
-                className={cn(
-                  "cursor-pointer transition-colors relative group",
-                  isActiveItem(item)
-                    ? "text-indigo-600 dark:text-indigo-400"
-                    : "text-accent-foreground hover:text-indigo-600 dark:hover:text-indigo-400",
-                )}
-              >
-                {item}
-                <span
-                  className={`absolute -bottom-1 left-0 h-0.5 bg-indigo-600 dark:bg-indigo-400 transition-all ${
-                    isActiveItem(item) ? "w-full" : "w-0 group-hover:w-full"
-                  }`}
-                ></span>
-              </motion.button>
-            ))}
+        <nav aria-label="Primary" className="hidden items-center gap-8 md:flex">
+          {navItems.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              onClick={(event) => {
+                event.preventDefault();
+                handleNavClick(item.href);
+              }}
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
 
-            <Button variant="default" asChild>
-              <Link href="/sign-in">Get Started</Link>
-            </Button>
-          </nav>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" className="hidden md:inline-flex">
+            <Link href="/sign-in">Sign in</Link>
+          </Button>
+          <Button asChild className="hidden md:inline-flex">
+            <Link href="/sign-in">Get started</Link>
+          </Button>
 
-          {/* Mobile Navigation */}
-          <div className="md:hidden flex items-center space-x-4">
-            <Drawer open={isOpen} onOpenChange={setIsOpen}>
-              <DrawerTrigger asChild>
-                <Button
-                  className="cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
-                  variant="ghost"
-                  size="icon"
-                >
-                  <Menu className="size-4" />
-                </Button>
-              </DrawerTrigger>
-              <DrawerContent className="px-6 pb-8">
-                <DrawerTitle></DrawerTitle>
-                <nav className="flex flex-col space-y-4 mt-6">
-                  {navItems.map((item) => (
-                    <Button
-                      key={item}
-                      onClick={() => handleNavClick(item)}
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start hover:text-indigo-600 dark:hover:text-indigo-400",
-                        isActiveItem(item) && "text-indigo-600 dark:text-indigo-400 font-medium",
-                      )}
-                    >
-                      {item}
-                    </Button>
-                  ))}
-                  <div className="pt-4">
-                    <RainbowButton className="w-full" asChild>
-                      <Link href="/sign-in" onClick={() => setIsOpen(false)}>
-                        Get Started
-                      </Link>
-                    </RainbowButton>
-                  </div>
-                </nav>
-              </DrawerContent>
-            </Drawer>
-          </div>
-
-          {/* Theme Toggle */}
           {mounted && (
             <Button
-              className="cursor-pointer text-muted-foreground hover:bg-transparent hover:text-foreground"
               variant="ghost"
               size="icon"
+              className="text-muted-foreground hover:text-foreground"
               onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              aria-label={
+                resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+              }
             >
-              {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              {resolvedTheme === "dark" ? (
+                <Sun className="size-4" aria-hidden="true" />
+              ) : (
+                <Moon className="size-4" aria-hidden="true" />
+              )}
             </Button>
           )}
+
+          <Drawer open={isOpen} onOpenChange={setIsOpen}>
+            <DrawerTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground md:hidden"
+                aria-label="Open navigation"
+              >
+                <Menu className="size-4" aria-hidden="true" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="px-6 pb-8">
+              <DrawerTitle className="sr-only">Navigation</DrawerTitle>
+              <nav aria-label="Mobile" className="mt-6 flex flex-col gap-1">
+                {navItems.map((item) => (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      handleNavClick(item.href);
+                    }}
+                    className="rounded-md px-3 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+              <div className="mt-6 flex flex-col gap-3">
+                <Button asChild size="lg" className="w-full">
+                  <Link href="/sign-in" onClick={() => setIsOpen(false)}>
+                    Get started
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline" className="w-full">
+                  <Link href="/sign-in" onClick={() => setIsOpen(false)}>
+                    Sign in
+                  </Link>
+                </Button>
+              </div>
+            </DrawerContent>
+          </Drawer>
         </div>
       </div>
     </motion.header>

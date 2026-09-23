@@ -11,12 +11,19 @@ export function WeightSummary({
   unit: DisplayWeightUnit;
 }) {
   const over = isOverLimit(weight.grams, limitGrams);
+  const suffix = limitGrams !== null ? (over ? " · over limit" : " · under limit") : "";
   return (
-    <span className="text-xs font-normal text-muted-foreground">
+    <span
+      className={
+        over
+          ? "font-mono text-xs font-normal tabular-nums text-warning-soft-foreground"
+          : "font-mono text-xs font-normal tabular-nums text-muted-foreground"
+      }
+    >
       {formatWeight(weight.grams, unit)}
       {limitGrams !== null ? ` / ${formatWeight(limitGrams, unit)}` : ""}
       {weight.complete ? "" : " (incomplete)"}
-      {limitGrams !== null ? (over ? " · over limit" : " · under limit") : ""}
+      {suffix}
     </span>
   );
 }

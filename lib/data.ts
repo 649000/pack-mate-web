@@ -1,8 +1,10 @@
 import { supabase } from "./supabase";
 import { getFirebaseAuth } from "./firebase";
+import type { BagIcon } from "./bag-icons";
 import type {
   ItemCategory,
   DestinationFacts,
+  ProfileTheme,
   ReusableBag,
   ReusableBagItem,
   ReusableItem,
@@ -14,6 +16,7 @@ import type {
   UserProfile,
 } from "./types";
 import {
+  validateBagIcon,
   validateBirthday,
   validateCategory,
   validateCountry,
@@ -25,6 +28,7 @@ import {
   validateOptionalName,
   validateOptionalUrl,
   validateQty,
+  validateTheme,
   validateWeight,
   validateWeightLimit,
   validateWeightUnit,
@@ -130,12 +134,14 @@ export async function listBags(): Promise<ReusableBag[]> {
 export async function createBag(input: {
   name: string;
   weightLimitGrams?: number | null;
+  icon?: BagIcon | null;
 }): Promise<ReusableBag> {
   const name = validateName(input.name, "Bag name");
   const weight_limit_grams = validateWeightLimit(input.weightLimitGrams);
+  const icon = validateBagIcon(input.icon);
   const { data, error } = await supabase
     .from("reusable_bags")
-    .insert({ name, weight_limit_grams })
+    .insert({ name, weight_limit_grams, icon })
     .select()
     .single();
   return unwrap(data as ReusableBag | null, error);
@@ -143,13 +149,14 @@ export async function createBag(input: {
 
 export async function updateBag(
   id: string,
-  input: { name: string; weightLimitGrams?: number | null },
+  input: { name: string; weightLimitGrams?: number | null; icon?: BagIcon | null },
 ): Promise<ReusableBag> {
   const name = validateName(input.name, "Bag name");
   const weight_limit_grams = validateWeightLimit(input.weightLimitGrams);
+  const icon = validateBagIcon(input.icon);
   const { data, error } = await supabase
     .from("reusable_bags")
-    .update({ name, weight_limit_grams })
+    .update({ name, weight_limit_grams, icon })
     .eq("id", id)
     .select()
     .single();
@@ -159,6 +166,21 @@ export async function updateBag(
 export async function deleteBag(id: string): Promise<void> {
   const { error } = await supabase.from("reusable_bags").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+// Duplicates a library bag, copying its icon, weight limit and default
+// contents. The database function copies the bag and its contents atomically
+// and verifies ownership; the source is never modified.
+export async function duplicateBag(sourceBagId: string): Promise<ReusableBag> {
+  const { data, error } = await supabase.rpc("duplicate_bag", { p_bag_id: sourceBagId });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("No data returned");
+  const { data: bag, error: bagError } = await supabase
+    .from("reusable_bags")
+    .select("*")
+    .eq("id", data as string)
+    .single();
+  return unwrap(bag as ReusableBag | null, bagError);
 }
 
 export async function listBagContents(bagId: string): Promise<ReusableBagItem[]> {
@@ -578,6 +600,21 @@ export async function upsertProfile(input: {
   return unwrap(data as UserProfile | null, error);
 }
 
+// Persists the theme on the profile without touching the other profile fields:
+// a targeted upsert writes only the theme (and updated_at).
+export async function updateProfileTheme(theme: ProfileTheme): Promise<void> {
+  const value = validateTheme(theme);
+  const uid = getFirebaseAuth().currentUser?.uid;
+  if (!uid) throw new Error("You must be signed in to change your theme");
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(
+      { user_id: uid, theme: value, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" },
+    );
+  if (error) throw new Error(error.message);
+}
+
 // ---------------------------------------------------------------------------
 // Account data: export and deletion
 // ---------------------------------------------------------------------------
@@ -647,4 +684,31 @@ export async function deleteAllUserData(): Promise<void> {
   if (itemsError) throw new Error(itemsError.message);
   const { error: profileError } = await supabase.from("profiles").delete().neq("user_id", "");
   if (profileError) throw new Error(profileError.message);
+}
+
+// ---------------------------------------------------------------------------
+// Packing suggestions
+// ---------------------------------------------------------------------------
+
+export async function listSuggestionDismissals(tripId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("suggestion_dismissals")
+    .select("suggestion_key")
+    .eq("trip_id", tripId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => (row as { suggestion_key: string }).suggestion_key);
+}
+
+export async function dismissSuggestion(input: {
+  tripId: string;
+  key: string;
+  source: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from("suggestion_dismissals")
+    .upsert(
+      { trip_id: input.tripId, suggestion_key: input.key, source: input.source },
+      { onConflict: "user_id,trip_id,suggestion_key" },
+    );
+  if (error) throw new Error(error.message);
 }

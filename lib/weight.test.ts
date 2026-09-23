@@ -44,6 +44,7 @@ function bag(
     position: 0,
     weight_limit_grams: weightLimitGrams,
     parent_bag_id: parentBagId,
+    icon: null,
   };
 }
 

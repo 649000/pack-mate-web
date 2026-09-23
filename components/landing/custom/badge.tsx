@@ -8,13 +8,13 @@ export function CustomBadge({
   className?: string;
 }) {
   return (
-    <div
+    <span
       className={cn(
-        "py-1 text-indigo-600 font-semibold border-b-2 border-indigo-600 mb-1.5",
+        "inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary",
         className,
       )}
     >
       {children}
-    </div>
+    </span>
   );
 }

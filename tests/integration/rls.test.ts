@@ -466,4 +466,176 @@ describe("RLS and copy-on-add (integration)", () => {
       true,
     );
   }, 30_000);
+
+  it("carries bag icons through copy-on-add and duplication and rejects unknown icons", async () => {
+    const bag = await rest("reusable_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Camera bag", icon: "camera" }),
+    });
+    expect(bag.status).toBe(201);
+    const bagId = (bag.body as { id: string }[])[0].id;
+
+    const trip = await rest("trips", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Icons", country_code: "JP" }),
+    });
+    const tripId = (trip.body as { id: string }[])[0].id;
+
+    await rest("rpc/add_library_bag_to_trip", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ p_trip_id: tripId, p_bag_id: bagId }),
+    });
+    const tripBags = await rest(`trip_bags?trip_id=eq.${tripId}&select=icon`, tokenA);
+    expect((tripBags.body as { icon: string | null }[])[0].icon).toBe("camera");
+
+    const dup = await rest("rpc/duplicate_trip", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        p_source_trip_id: tripId,
+        p_name: "Icons copy",
+        p_country_code: "JP",
+        p_destination: null,
+        p_start_date: null,
+        p_end_date: null,
+      }),
+    });
+    const newTripId = dup.body as string;
+    const dupBags = await rest(`trip_bags?trip_id=eq.${newTripId}&select=icon`, tokenA);
+    expect((dupBags.body as { icon: string | null }[])[0].icon).toBe("camera");
+
+    const badBag = await rest("reusable_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Bad icon", icon: "spaceship" }),
+    });
+    expect(badBag.status).toBeGreaterThanOrEqual(400);
+
+    const badTripBag = await rest("trip_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, name: "Bad", icon: "spaceship" }),
+    });
+    expect(badTripBag.status).toBeGreaterThanOrEqual(400);
+  }, 30_000);
+
+  it("duplicates a bag atomically with its contents and rejects another user", async () => {
+    const item = await rest("reusable_items", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Charger", default_qty: 1 }),
+    });
+    const itemId = (item.body as { id: string }[])[0].id;
+
+    const bag = await rest("reusable_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Electronics", icon: "camera", weight_limit_grams: 2000 }),
+    });
+    const bagId = (bag.body as { id: string }[])[0].id;
+
+    await rest("reusable_bag_items", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ bag_id: bagId, item_id: itemId, qty: 2, position: 0 }),
+    });
+
+    const dup = await rest("rpc/duplicate_bag", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ p_bag_id: bagId }),
+    });
+    expect([200, 201]).toContain(dup.status);
+    const copyId = dup.body as string;
+    expect(copyId).not.toBe(bagId);
+
+    const copy = await rest(
+      `reusable_bags?id=eq.${copyId}&select=name,icon,weight_limit_grams`,
+      tokenA,
+    );
+    const copyRow = (copy.body as { name: string; icon: string; weight_limit_grams: number }[])[0];
+    expect(copyRow.name).toBe("Electronics (copy)");
+    expect(copyRow.icon).toBe("camera");
+    expect(copyRow.weight_limit_grams).toBe(2000);
+
+    const copyContents = await rest(
+      `reusable_bag_items?bag_id=eq.${copyId}&select=item_id,qty`,
+      tokenA,
+    );
+    expect(copyContents.body).toHaveLength(1);
+    expect((copyContents.body as { item_id: string; qty: number }[])[0].qty).toBe(2);
+
+    // The source is untouched.
+    const sourceContents = await rest(`reusable_bag_items?bag_id=eq.${bagId}&select=id`, tokenA);
+    expect(sourceContents.body).toHaveLength(1);
+
+    // A long name is suffixed without exceeding the limit.
+    const longBag = await rest("reusable_bags", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "a".repeat(200) }),
+    });
+    const longId = (longBag.body as { id: string }[])[0].id;
+    const longCopy = await rest("rpc/duplicate_bag", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ p_bag_id: longId }),
+    });
+    const longCopyId = longCopy.body as string;
+    const longRow = await rest(`reusable_bags?id=eq.${longCopyId}&select=name`, tokenA);
+    const longName = (longRow.body as { name: string }[])[0].name;
+    expect(longName.endsWith(" (copy)")).toBe(true);
+    expect(longName.length).toBeLessThanOrEqual(200);
+
+    // A second user cannot duplicate the first user's bag.
+    const bDup = await rest("rpc/duplicate_bag", tokenB, {
+      method: "POST",
+      body: JSON.stringify({ p_bag_id: bagId }),
+    });
+    expect(bDup.status).toBeGreaterThanOrEqual(400);
+  }, 30_000);
+
+  it("scopes suggestion dismissals to the owner", async () => {
+    const trip = await rest("trips", tokenA, {
+      method: "POST",
+      body: JSON.stringify({ name: "Dismiss", country_code: "JP" }),
+    });
+    const tripId = (trip.body as { id: string }[])[0].id;
+
+    const created = await rest("suggestion_dismissals", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        suggestion_key: "rules:adapter:CF",
+        source: "rules",
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const own = await rest(`suggestion_dismissals?trip_id=eq.${tripId}&select=*`, tokenA);
+    expect((own.body as unknown[]).length).toBe(1);
+
+    const bList = await rest(`suggestion_dismissals?trip_id=eq.${tripId}&select=*`, tokenB);
+    expect(bList.body).toEqual([]);
+
+    // A second user cannot attach a dismissal to the first user's trip, nor forge the owner.
+    const bAttach = await rest("suggestion_dismissals", tokenB, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, suggestion_key: "x", source: "rules" }),
+    });
+    expect(bAttach.status).toBeGreaterThanOrEqual(400);
+
+    const forge = await rest("suggestion_dismissals", tokenB, {
+      method: "POST",
+      body: JSON.stringify({ trip_id: tripId, suggestion_key: "y", user_id: userA }),
+    });
+    expect(forge.status).toBe(403);
+
+    // A suggestion can be dismissed only once per user and trip.
+    const dupe = await rest("suggestion_dismissals", tokenA, {
+      method: "POST",
+      body: JSON.stringify({
+        trip_id: tripId,
+        suggestion_key: "rules:adapter:CF",
+        source: "rules",
+      }),
+    });
+    expect(dupe.status).toBeGreaterThanOrEqual(400);
+
+    // Dismissals are removed with the trip.
+    await rest(`trips?id=eq.${tripId}`, tokenA, { method: "DELETE" });
+    const remaining = await rest(`suggestion_dismissals?trip_id=eq.${tripId}&select=id`, tokenA);
+    expect(remaining.body).toEqual([]);
+  }, 30_000);
 });

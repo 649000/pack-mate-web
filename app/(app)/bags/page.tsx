@@ -3,33 +3,16 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Columns3, ListTree, Luggage, PackageOpen, Pencil, Plus, Trash2 } from "lucide-react";
-import {
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type ColumnDef,
-  type SortingState,
-  type VisibilityState,
-} from "@tanstack/react-table";
+import { Copy, Luggage, PackageOpen, Pencil, Plane, Plus, Trash2 } from "lucide-react";
+import { AddToTripDialog } from "@/components/add-to-trip-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { RecordAction } from "@/components/record-action";
 import { ListSearchToolbar } from "@/components/list-search";
+import { BagIcon } from "@/components/packing/bag-icon";
 import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardHeading,
-  CardTitle,
-  CardToolbar,
-} from "@/components/ui/card";
-import { DataGrid } from "@/components/ui/data-grid";
-import { DataGridTable } from "@/components/ui/data-grid-table";
-import { DataGridColumnHeader } from "@/components/ui/data-grid-column-header";
-import { DataGridColumnVisibility } from "@/components/ui/data-grid-column-visibility";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,16 +38,33 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   addBagItem,
+  addLibraryBagToTrip,
   createBag,
   deleteBag,
+  duplicateBag,
   getProfile,
+  listAllBagItems,
   listBagContents,
   listBags,
   listItems,
+  listTrips,
   removeBagItem,
   updateBag,
 } from "@/lib/data";
-import type { DisplayWeightUnit, ReusableBag, ReusableBagItem, ReusableItem } from "@/lib/types";
+import type {
+  DisplayWeightUnit,
+  ReusableBag,
+  ReusableBagItem,
+  ReusableItem,
+  Trip,
+} from "@/lib/types";
+import { cn } from "@/lib/utils";
+import {
+  BAG_ICONS,
+  BAG_ICON_KEYS,
+  BAG_ICON_LABELS,
+  type BagIcon as BagIconKey,
+} from "@/lib/bag-icons";
 import { filterByName } from "@/lib/packing";
 import { parseQty, validateName, ITEM_CATEGORY_LABELS } from "@/lib/validation";
 import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
@@ -71,12 +72,16 @@ import { formatWeight, fromGrams, toGrams } from "@/lib/weight";
 export function BagsView() {
   const [bags, setBags] = useState<ReusableBag[]>([]);
   const [items, setItems] = useState<ReusableItem[]>([]);
+  const [allBagItems, setAllBagItems] = useState<ReusableBagItem[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [addTarget, setAddTarget] = useState<ReusableBag | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ReusableBag | null>(null);
   const [name, setName] = useState("");
   const [limit, setLimit] = useState("");
+  const [icon, setIcon] = useState<BagIconKey | "">("");
   const [weightUnit, setWeightUnit] = useState<DisplayWeightUnit>("kg");
   const [saving, setSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ReusableBag | null>(null);
@@ -85,16 +90,16 @@ export function BagsView() {
   const [contents, setContents] = useState<ReusableBagItem[]>([]);
   const [addItemId, setAddItemId] = useState("");
   const [addQty, setAddQty] = useState("1");
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
 
   function refresh() {
-    return Promise.all([listBags(), listItems(), getProfile()])
-      .then(([nextBags, nextItems, profile]) => {
+    return Promise.all([listBags(), listItems(), listAllBagItems(), getProfile(), listTrips()])
+      .then(([nextBags, nextItems, nextBagItems, profile, nextTrips]) => {
         setBags(nextBags);
         setItems(nextItems);
+        setAllBagItems(nextBagItems);
+        setTrips(nextTrips);
         setWeightUnit(profile?.weight_unit ?? "kg");
       })
       .catch((error: unknown) => {
@@ -113,10 +118,15 @@ export function BagsView() {
     return items.find((item) => item.id === id)?.name ?? "Unknown item";
   }
 
+  function itemCategory(id: string) {
+    return items.find((item) => item.id === id)?.category ?? null;
+  }
+
   function openCreate() {
     setEditing(null);
     setName("");
     setLimit("");
+    setIcon("");
     setEditorOpen(true);
   }
 
@@ -124,6 +134,7 @@ export function BagsView() {
     (bag: ReusableBag) => {
       setEditing(bag);
       setName(bag.name);
+      setIcon(bag.icon ?? "");
       setLimit(
         bag.weight_limit_grams === null
           ? ""
@@ -140,6 +151,7 @@ export function BagsView() {
     try {
       const payload = {
         name: validateName(name, "Bag name"),
+        icon: icon === "" ? null : icon,
         weightLimitGrams:
           limit.trim() === "" ? null : Math.round(toGrams(Number(limit), weightUnit)),
       };
@@ -171,6 +183,16 @@ export function BagsView() {
     }
   }
 
+  async function handleDuplicate(bag: ReusableBag) {
+    try {
+      await duplicateBag(bag.id);
+      toast.success("Bag duplicated");
+      await refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to duplicate bag");
+    }
+  }
+
   const openContents = useCallback(async (bag: ReusableBag) => {
     setContentsBag(bag);
     setAddItemId("");
@@ -187,6 +209,7 @@ export function BagsView() {
     try {
       await addBagItem(contentsBag.id, addItemId, parseQty(addQty));
       setContents(await listBagContents(contentsBag.id));
+      setAllBagItems(await listAllBagItems());
       setAddItemId("");
       setAddQty("1");
     } catch (error) {
@@ -199,12 +222,22 @@ export function BagsView() {
     try {
       await removeBagItem(id);
       setContents(await listBagContents(contentsBag.id));
+      setAllBagItems(await listAllBagItems());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to remove item");
     }
   }
 
   const visibleBags = filterByName(bags, query);
+  const contentsByBag = useMemo(() => {
+    const map = new Map<string, ReusableBagItem[]>();
+    for (const row of allBagItems) {
+      const list = map.get(row.bag_id) ?? [];
+      list.push(row);
+      map.set(row.bag_id, list);
+    }
+    return map;
+  }, [allBagItems]);
 
   const itemOptions = useMemo<LibraryPickerOption[]>(
     () =>
@@ -212,72 +245,15 @@ export function BagsView() {
         id: item.id,
         name: item.name,
         detail: item.category ? ITEM_CATEGORY_LABELS[item.category] : undefined,
+        category: item.category,
       })),
     [items],
   );
 
-  const columns = useMemo<ColumnDef<ReusableBag>[]>(
-    () => [
-      {
-        id: "name",
-        accessorKey: "name",
-        meta: { headerTitle: "Bag" },
-        header: ({ column }) => <DataGridColumnHeader column={column} title="Bag" />,
-        cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted text-muted-foreground">
-              <Luggage className="size-4" aria-hidden="true" />
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="font-medium">{row.original.name}</span>
-              {row.original.weight_limit_grams !== null ? (
-                <span className="text-xs text-muted-foreground">
-                  Limit {formatWeight(row.original.weight_limit_grams, weightUnit)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: "actions",
-        enableSorting: false,
-        enableHiding: false,
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <RecordAction
-              icon={ListTree}
-              label="Contents"
-              onClick={() => void openContents(row.original)}
-            />
-            <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(row.original)} />
-            <RecordAction
-              icon={Trash2}
-              label="Delete"
-              onClick={() => setPendingDelete(row.original)}
-            />
-          </div>
-        ),
-      },
-    ],
-    [openContents, openEdit, weightUnit],
-  );
-
-  const table = useReactTable({
-    data: visibleBags,
-    columns,
-    state: { sorting, columnVisibility },
-    onSortingChange: setSorting,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-7">
       <PageHeader
-        title="Bags"
+        title="Bag Library"
         description="Reusable containers and their usual contents."
         breadcrumb={[{ label: "Library" }, { label: "Bags" }]}
       >
@@ -287,42 +263,14 @@ export function BagsView() {
         </Button>
       </PageHeader>
 
-      <Card>
-        <CardHeader>
-          <CardHeading>
-            <CardTitle>Bag library</CardTitle>
-            <CardDescription>
-              {bags.length} {bags.length === 1 ? "bag" : "bags"}
-            </CardDescription>
-          </CardHeading>
-          {!loading && bags.length > 0 ? (
-            <CardToolbar>
-              <ListSearchToolbar
-                id="bag-search"
-                label="Search bags"
-                value={query}
-                onChange={setQuery}
-                placeholder="Search bags"
-              />
-              <DataGridColumnVisibility
-                table={table}
-                trigger={
-                  <Button variant="outline" size="sm">
-                    <Columns3 aria-hidden="true" />
-                    Columns
-                  </Button>
-                }
-              />
-            </CardToolbar>
-          ) : null}
-        </CardHeader>
-        {loading ? (
-          <div className="flex flex-col gap-2 p-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton key={index} className="h-12 w-full rounded-md" />
-            ))}
-          </div>
-        ) : bags.length === 0 ? (
+      {loading ? (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-56 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : bags.length === 0 ? (
+        <Card>
           <EmptyState
             icon={Luggage}
             title="No bags yet"
@@ -334,20 +282,122 @@ export function BagsView() {
               </Button>
             }
           />
-        ) : visibleBags.length === 0 ? (
-          <EmptyState
-            icon={PackageOpen}
-            title={`No bags match “${query}”.`}
-            description="Try a different search term."
-          />
-        ) : (
-          <DataGrid table={table} recordCount={visibleBags.length} tableLayout={{ width: "auto" }}>
-            <div className="overflow-x-auto">
-              <DataGridTable />
+        </Card>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <ListSearchToolbar
+              id="bag-search"
+              label="Search bags"
+              value={query}
+              onChange={setQuery}
+              placeholder="Search bags"
+            />
+            <span className="font-mono text-xs tracking-wide text-muted-foreground uppercase">
+              {bags.length} {bags.length === 1 ? "bag" : "bags"}
+            </span>
+          </div>
+
+          {visibleBags.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={PackageOpen}
+                title={`No bags match “${query}”.`}
+                description="Try a different search term."
+              />
+            </Card>
+          ) : (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {visibleBags.map((bag) => {
+                const bagContents = contentsByBag.get(bag.id) ?? [];
+                return (
+                  <Card key={bag.id}>
+                    <CardContent className="flex flex-col gap-4 p-5 sm:p-6">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                            <BagIcon
+                              icon={bag.icon}
+                              categories={bagContents.map((row) => itemCategory(row.item_id))}
+                              className="size-5"
+                            />
+                          </span>
+                          <div className="min-w-0">
+                            <h3 className="truncate font-heading text-base font-semibold text-foreground">
+                              {bag.name}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              {bagContents.length}{" "}
+                              {bagContents.length === 1 ? "default item" : "default items"}
+                            </p>
+                          </div>
+                        </div>
+                        <StatusChip status="neutral">
+                          {bag.weight_limit_grams === null
+                            ? "No limit"
+                            : `Limit ${formatWeight(bag.weight_limit_grams, weightUnit)}`}
+                        </StatusChip>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <p className="text-[0.6875rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                          Default items ({bagContents.length})
+                        </p>
+                        {bagContents.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No default items yet.</p>
+                        ) : (
+                          <ul className="flex flex-col gap-1.5">
+                            {bagContents.map((row) => (
+                              <li
+                                key={row.id}
+                                className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-1.5 text-sm"
+                              >
+                                <span className="min-w-0 truncate text-foreground">
+                                  {itemName(row.item_id)}
+                                </span>
+                                <span className="font-mono text-xs text-muted-foreground tabular-nums">
+                                  x{row.qty}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1 border-t border-border pt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void openContents(bag)}
+                          aria-label="Contents"
+                        >
+                          Manage contents
+                        </Button>
+                        <RecordAction
+                          icon={Plane}
+                          label="Add to trip"
+                          onClick={() => setAddTarget(bag)}
+                        />
+                        <RecordAction
+                          icon={Copy}
+                          label="Duplicate"
+                          onClick={() => void handleDuplicate(bag)}
+                        />
+                        <RecordAction icon={Pencil} label="Edit" onClick={() => openEdit(bag)} />
+                        <RecordAction
+                          icon={Trash2}
+                          label="Delete"
+                          onClick={() => setPendingDelete(bag)}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-          </DataGrid>
-        )}
-      </Card>
+          )}
+        </>
+      )}
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
         <DialogContent>
@@ -365,6 +415,36 @@ export function BagsView() {
                   onChange={(event) => setName(event.target.value)}
                   required
                 />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Icon</Label>
+                <div role="group" aria-label="Bag icon" className="grid grid-cols-7 gap-1.5">
+                  {BAG_ICON_KEYS.map((key) => {
+                    const IconOption = BAG_ICONS[key];
+                    const selected = icon === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setIcon(selected ? "" : key)}
+                        aria-pressed={selected}
+                        aria-label={BAG_ICON_LABELS[key]}
+                        title={BAG_ICON_LABELS[key]}
+                        className={cn(
+                          "flex size-9 items-center justify-center rounded-md border transition-colors",
+                          selected
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-input text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <IconOption className="size-4" aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Optional. Defaults to an icon based on the bag&rsquo;s contents.
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="bag-limit">Weight limit ({weightUnit})</Label>
@@ -406,7 +486,7 @@ export function BagsView() {
               contents.map((row) => (
                 <div key={row.id} className="flex items-center gap-3 text-sm">
                   <span className="flex-1">{itemName(row.item_id)}</span>
-                  <span className="text-muted-foreground">x{row.qty}</span>
+                  <span className="font-mono text-muted-foreground tabular-nums">x{row.qty}</span>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -449,6 +529,22 @@ export function BagsView() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AddToTripDialog
+        open={addTarget !== null}
+        onOpenChange={(open) => !open && setAddTarget(null)}
+        trips={trips}
+        subject={addTarget?.name ?? ""}
+        onAdd={async (tripId) => {
+          if (!addTarget) return;
+          try {
+            await addLibraryBagToTrip(tripId, addTarget.id);
+            toast.success("Added to trip");
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to add to trip");
+          }
+        }}
+      />
 
       <AlertDialog
         open={pendingDelete !== null}

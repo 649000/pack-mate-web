@@ -29,6 +29,7 @@ function bag(partial: Partial<TripBag> & { id: string }): TripBag {
     position: 0,
     weight_limit_grams: null,
     parent_bag_id: null,
+    icon: null,
     ...partial,
   };
 }

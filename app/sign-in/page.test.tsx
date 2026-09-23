@@ -98,7 +98,7 @@ describe("SignInPage", () => {
     await user.click(screen.getByRole("button", { name: /^sign in$/i }));
 
     await waitFor(() => expect(signIn).toHaveBeenCalledWith("a@example.com", "secret123"));
-    expect(replace).toHaveBeenCalledWith("/trips");
+    expect(replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("signs in with Google", async () => {
@@ -108,7 +108,7 @@ describe("SignInPage", () => {
     await user.click(screen.getByRole("button", { name: /continue with google/i }));
 
     await waitFor(() => expect(signInWithGoogle).toHaveBeenCalled());
-    expect(replace).toHaveBeenCalledWith("/trips");
+    expect(replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("links to the password reset page", () => {
@@ -140,7 +140,7 @@ describe("SignInPage", () => {
     await waitFor(() =>
       expect(accountMocks.linkPendingCredential).toHaveBeenCalledWith(credential),
     );
-    expect(replace).toHaveBeenCalledWith("/trips");
+    expect(replace).toHaveBeenCalledWith("/dashboard");
   });
 
   it("asks for a second factor when the account has one", async () => {
@@ -170,6 +170,6 @@ describe("SignInPage", () => {
     await user.click(screen.getByRole("button", { name: /^verify$/i }));
 
     await waitFor(() => expect(resolveMfa).toHaveBeenCalledWith(resolver, "123456"));
-    expect(replace).toHaveBeenCalledWith("/trips");
+    expect(replace).toHaveBeenCalledWith("/dashboard");
   });
 });

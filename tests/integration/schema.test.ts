@@ -12,6 +12,7 @@ const REQUIRED_TABLES = [
   "trip_entries",
   "profiles",
   "destination_facts",
+  "suggestion_dismissals",
 ];
 
 describe("schema and RLS policies (integration)", () => {

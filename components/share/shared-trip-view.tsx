@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Backpack, Check, ClipboardList } from "lucide-react";
 import {
   Card,
@@ -9,9 +10,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CountryFlag } from "@/components/ui/country-flag";
 import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/empty-state";
 import { WeightSummary } from "@/components/packing/weight-summary";
+import { BagIcon } from "@/components/packing/bag-icon";
 import { CategoryBadge } from "@/components/packing/category-badge";
 import { TripCountdown } from "@/components/packing/trip-countdown";
 import { DestinationInfo } from "@/components/packing/destination-info";
@@ -120,6 +123,7 @@ function SharedEntryRow({
 
 function SharedEntryGroup({
   title,
+  icon,
   entries,
   bags,
   unit,
@@ -127,6 +131,7 @@ function SharedEntryGroup({
   limitGrams,
 }: {
   title: string;
+  icon?: ReactNode;
   entries: SharedTripEntry[];
   bags: SharedTripBag[];
   unit: DisplayWeightUnit;
@@ -138,6 +143,7 @@ function SharedEntryGroup({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+          {icon}
           {title}
           <span className="text-xs font-normal text-muted-foreground">
             {packed}/{entries.length} packed
@@ -180,33 +186,46 @@ export function SharedTripView({
   const destination = formatDestination(trip.destination, trip.country_code);
 
   function renderBagTree(nodes: BagNode<SharedTripBag>[], depth: number) {
-    return nodes.map((node) => (
-      <div key={node.bag.id} className="flex flex-col gap-4">
-        <SharedEntryGroup
-          title={node.bag.name}
-          entries={byBag.get(node.bag.id) ?? []}
-          bags={bags}
-          unit={unit}
-          weight={sumBagWeight(node.bag, bags, entries)}
-          limitGrams={node.bag.weight_limit_grams}
-        />
-        {node.children.length > 0 ? (
-          <div
-            className={
-              depth < 3 ? "flex flex-col gap-4 border-l pl-3 sm:pl-4" : "flex flex-col gap-4"
+    return nodes.map((node) => {
+      const bagEntries = byBag.get(node.bag.id) ?? [];
+      return (
+        <div key={node.bag.id} className="flex flex-col gap-4">
+          <SharedEntryGroup
+            title={node.bag.name}
+            icon={
+              <BagIcon
+                icon={node.bag.icon}
+                categories={bagEntries.map((entry) => entry.category)}
+                className="size-4 text-muted-foreground"
+              />
             }
-          >
-            {renderBagTree(node.children, depth + 1)}
-          </div>
-        ) : null}
-      </div>
-    ));
+            entries={bagEntries}
+            bags={bags}
+            unit={unit}
+            weight={sumBagWeight(node.bag, bags, entries)}
+            limitGrams={node.bag.weight_limit_grams}
+          />
+          {node.children.length > 0 ? (
+            <div
+              className={
+                depth < 3 ? "flex flex-col gap-4 border-l pl-3 sm:pl-4" : "flex flex-col gap-4"
+              }
+            >
+              {renderBagTree(node.children, depth + 1)}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-7">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl leading-none font-medium text-foreground">{trip.name}</h1>
+        <h1 className="flex items-center gap-2 text-xl leading-none font-medium text-foreground">
+          <CountryFlag code={trip.country_code} className="h-5 w-7" />
+          {trip.name}
+        </h1>
         {destination ? <p className="text-sm text-muted-foreground">{destination}</p> : null}
         {dates ? <p className="text-sm text-muted-foreground">{dates}</p> : null}
         <TripCountdown

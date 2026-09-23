@@ -8,7 +8,12 @@ export function CustomTitle({
   className?: string;
 }) {
   return (
-    <h2 className={cn("leading-6 text-3xl md:text-5xl font-bold text-foreground", className)}>
+    <h2
+      className={cn(
+        "font-heading text-3xl font-bold tracking-tight text-balance text-foreground sm:text-4xl",
+        className,
+      )}
+    >
       {children}
     </h2>
   );

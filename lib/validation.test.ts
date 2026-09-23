@@ -21,6 +21,7 @@ import {
   validateOptionalUrl,
   validatePassword,
   validateQty,
+  validateTheme,
   validateWeight,
   validateWeightLimit,
   validateWeightUnit,
@@ -348,5 +349,28 @@ describe("validatePassword", () => {
   it("rejects a password below the minimum length", () => {
     expect(() => validatePassword("1234567")).toThrow(ValidationError);
     expect(() => validatePassword("1234567")).toThrow(/at least 8/i);
+  });
+});
+
+describe("validateTheme", () => {
+  it("accepts light and dark", () => {
+    expect(validateTheme("light")).toBe("light");
+    expect(validateTheme("dark")).toBe("dark");
+  });
+
+  it("rejects anything else", () => {
+    expect(() => validateTheme("sepia")).toThrow(ValidationError);
+    expect(() => validateTheme(null)).toThrow(ValidationError);
+  });
+
+  it("matches the values allowed by the database check constraint", () => {
+    const migration = readFileSync(
+      resolve(process.cwd(), "supabase/migrations/20260923020000_profile_theme.sql"),
+      "utf8",
+    );
+    const match = migration.match(/profiles_theme_valid check \(theme in \(([^)]*)\)\)/);
+    expect(match).not.toBeNull();
+    const constraintValues = [...match![1].matchAll(/'([a-z]+)'/g)].map((value) => value[1]);
+    expect([...constraintValues].sort()).toEqual(["dark", "light"]);
   });
 });

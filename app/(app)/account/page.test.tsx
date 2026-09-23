@@ -94,6 +94,7 @@ describe("AccountView", () => {
       birthday: null,
       gender: null,
       weight_unit: "lb",
+      theme: "light",
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-01T00:00:00Z",
     });

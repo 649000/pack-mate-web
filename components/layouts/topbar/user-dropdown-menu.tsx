@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTheme } from "next-themes";
 import { LogOut, Moon, Sun, User } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { updateProfileTheme } from "@/lib/data";
 import { initials } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -18,6 +19,16 @@ export function UserDropdownMenu() {
   const { user, signOut } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
   const email = user?.email ?? "";
+
+  async function toggleTheme() {
+    const next = resolvedTheme === "dark" ? "light" : "dark";
+    setTheme(next);
+    try {
+      await updateProfileTheme(next);
+    } catch {
+      // The theme is applied locally; persisting it is best-effort.
+    }
+  }
 
   return (
     <DropdownMenu>
@@ -47,7 +58,7 @@ export function UserDropdownMenu() {
             <span>Account</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}>
+        <DropdownMenuItem onClick={() => void toggleTheme()}>
           {resolvedTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           <span>{resolvedTheme === "dark" ? "Light mode" : "Dark mode"}</span>
         </DropdownMenuItem>

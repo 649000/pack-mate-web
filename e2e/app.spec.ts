@@ -43,7 +43,7 @@ for (const viewport of viewports) {
   test(`landing has no horizontal overflow on ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: /pack smarter for/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /pack lighter/i })).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

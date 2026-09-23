@@ -49,6 +49,7 @@ function bag(id: string, parentBagId: string | null = null): TripBag {
     position: 0,
     weight_limit_grams: null,
     parent_bag_id: parentBagId,
+    icon: null,
   };
 }
 

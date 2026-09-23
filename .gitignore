@@ -56,3 +56,6 @@ next-env.d.ts
 /playwright/.cache/
 
 /reference
+
+# stitch design tool export
+/.stitch

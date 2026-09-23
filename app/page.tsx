@@ -2,29 +2,27 @@
 
 import Header from "@/components/landing/header";
 import Hero from "@/components/landing/hero";
-import TrustedBrands from "@/components/landing/trusted-brands";
-import HowItWorks from "@/components/landing/how-it-works";
+import Stats from "@/components/landing/stats";
+import ProductShowcase from "@/components/landing/product-showcase";
 import Features from "@/components/landing/features";
-import Testimonials from "@/components/landing/testimonails";
-import Pricing from "@/components/landing/pricing";
-import FAQ from "@/components/landing/faq";
+import Comparison from "@/components/landing/comparison";
+import HowItWorks from "@/components/landing/how-it-works";
 import CallToAction from "@/components/landing/call-to-action";
-import Contact from "@/components/landing/contact";
 import Footer from "@/components/landing/footer";
 
 export default function Page() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <Header />
-      <Hero />
-      <TrustedBrands />
-      <HowItWorks />
-      <Features />
-      <Testimonials />
-      <Pricing />
-      <FAQ />
-      <CallToAction />
-      <Contact />
+      <main>
+        <Hero />
+        <Stats />
+        <ProductShowcase />
+        <Features />
+        <Comparison />
+        <HowItWorks />
+        <CallToAction />
+      </main>
       <Footer />
     </div>
   );

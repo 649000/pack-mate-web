@@ -212,9 +212,9 @@ export function SharesView() {
   });
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-7">
       <PageHeader
-        title="Shared links"
+        title="Shared Links"
         description="Public, read-only links to your packing lists."
         breadcrumb={[{ label: "Packing" }, { label: "Shared links" }]}
       />

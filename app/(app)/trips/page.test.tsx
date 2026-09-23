@@ -15,6 +15,9 @@ vi.mock("@/lib/data", () => ({
   updateTrip: vi.fn(),
   deleteTrip: vi.fn(),
   duplicateTrip: vi.fn(),
+  getProfile: vi.fn(),
+  listTripBags: vi.fn(),
+  listTripEntries: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -45,6 +48,9 @@ const trip: Trip = {
 beforeEach(() => {
   vi.clearAllMocks();
   params.current = "";
+  vi.mocked(data.getProfile).mockResolvedValue(null);
+  vi.mocked(data.listTripBags).mockResolvedValue([]);
+  vi.mocked(data.listTripEntries).mockResolvedValue([]);
 });
 
 describe("TripsView", () => {
@@ -52,6 +58,13 @@ describe("TripsView", () => {
     vi.mocked(data.listTrips).mockResolvedValue([]);
     render(<TripsView />);
     expect(await screen.findByText(/no trips yet/i)).toBeInTheDocument();
+  });
+
+  it("opens the create dialog when the shell links with ?new=1", async () => {
+    params.current = "new=1";
+    vi.mocked(data.listTrips).mockResolvedValue([]);
+    render(<TripsView />);
+    expect(await screen.findByLabelText("Name")).toBeInTheDocument();
   });
 
   it("lists existing trips with their dates", async () => {

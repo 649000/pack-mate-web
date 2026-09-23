@@ -13,6 +13,7 @@ function bag(overrides: Partial<SharedTripBag> & { id: string; name: string }): 
     parent_bag_id: null,
     position: 0,
     weight_limit_grams: null,
+    icon: null,
     ...overrides,
   };
 }

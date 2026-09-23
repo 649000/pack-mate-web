@@ -2,17 +2,17 @@
 
 ## Purpose
 
-Defines the application's visual system: the shell and page chrome used throughout the authenticated app, and the public marketing landing page, both derived from the licensed Metronic reference.
+Defines the application's visual system: the shell and page chrome used throughout the authenticated app, the signed-in home, the library surfaces, and the public marketing landing page, all derived from the Stitch design systems (Kinetic Utility for light, Kinetic Manifest for dark).
 
 ## Requirements
 
 ### Requirement: Authenticated app uses a consistent application shell
 
-Every authenticated page SHALL render inside a single shared application shell that provides primary navigation and a signed-in header, rather than each page composing its own chrome.
+Every authenticated page SHALL render inside a single shared application shell that provides primary navigation and a signed-in header, rather than each page composing its own chrome. The shell SHALL follow the Stitch navigation design: a horizontal top navigation bar on large screens, and a compact app bar with a bottom tab bar on small screens. The shell SHALL NOT present a notifications control, because Pack Mate has no notifications.
 
 #### Scenario: Shell wraps every authenticated page
 
-- **WHEN** the user visits any authenticated page (trips, bags, items, or a trip)
+- **WHEN** the user visits any authenticated page (the dashboard, trips, bags, items, shared links, or a trip)
 - **THEN** the page renders inside the shared shell with the same primary navigation and header
 
 #### Scenario: Primary navigation moves between areas
@@ -20,14 +20,24 @@ Every authenticated page SHALL render inside a single shared application shell t
 - **WHEN** the user selects an area from the shell navigation
 - **THEN** the app navigates to that area and marks it as the current location
 
+#### Scenario: Desktop navigation is horizontal
+
+- **WHEN** the app is viewed at a desktop width
+- **THEN** the primary navigation is presented as a horizontal top bar with the areas Dashboard, Trips, Bag Library, Items Library and Shared Links, along with global search, a create action and the account control
+
+#### Scenario: No notifications control
+
+- **WHEN** the user views the shell at any width
+- **THEN** there is no notifications control; the account control holds account, theme and sign-out
+
 ### Requirement: Primary navigation adapts to screen size
 
-On small screens the primary navigation SHALL remain reachable without a permanently visible sidebar, and on larger screens it SHALL be presented as persistent chrome.
+On small screens the primary navigation SHALL remain reachable without a permanently visible sidebar, and on larger screens it SHALL be presented as persistent chrome. On small screens the app SHALL present a bottom tab bar for the primary areas and a top app bar for the account and secondary areas.
 
 #### Scenario: Small screen navigation
 
 - **WHEN** the app is viewed at a mobile width
-- **THEN** the persistent sidebar is not shown and the user can open the primary navigation from a visible control
+- **THEN** the persistent sidebar is not shown and the primary areas are reachable from a bottom tab bar, with the account and shared links reachable from the top app bar
 
 #### Scenario: Large screen navigation
 
@@ -36,12 +46,12 @@ On small screens the primary navigation SHALL remain reachable without a permane
 
 ### Requirement: Landing page presents the full marketing experience
 
-The public landing page SHALL present the complete marketing experience from the reference template, including a header, hero, and the template's supporting marketing sections, rather than a placeholder page.
+The public landing page SHALL present the complete marketing experience in the Stitch landing design, including a header, hero, and the design's supporting marketing sections, rather than a placeholder page.
 
 #### Scenario: Landing shows the marketing sections
 
 - **WHEN** a visitor opens the landing page
-- **THEN** they see the header, hero, and the template's supporting sections (such as how it works, features, pricing, FAQ and footer)
+- **THEN** they see the header, hero, and the design's supporting sections (such as the product showcase, features, comparison, peace-of-mind steps and footer)
 
 #### Scenario: Landing remains public
 
@@ -59,12 +69,12 @@ Calls to action on the landing page SHALL lead visitors into the existing sign-i
 
 ### Requirement: Visual system is consistent across app and landing
 
-The app and the landing page SHALL use the reference design system's token base and component appearance, so interactive controls look consistent throughout.
+The app and the landing page SHALL use the Stitch design systems' token base and component appearance, so interactive controls look consistent throughout, in both light and dark themes.
 
 #### Scenario: Shared controls use the reference appearance
 
 - **WHEN** the user interacts with controls such as buttons, inputs, cards and dialogs
-- **THEN** they match the reference design system's appearance and token base
+- **THEN** they match the Stitch design system's appearance and token base
 
 ### Requirement: Interface is usable on mobile and desktop
 
@@ -82,21 +92,41 @@ The shell and the landing page SHALL remain usable at mobile and desktop widths,
 
 ### Requirement: Paid template source is not committed
 
-The repository SHALL NOT contain the paid template source; only application code derived from it SHALL be committed.
+The repository SHALL NOT contain third-party template or design-tool source; only application code derived from it, or written for Pack Mate, SHALL be committed.
 
 #### Scenario: Template source stays out of the repository
 
 - **WHEN** the repository contents and build output are inspected
-- **THEN** the paid template source is absent and only derived application code is present
+- **THEN** no third-party template source is present and only derived application code is present
 
 ### Requirement: Content surfaces use the theme component that fits the feature
 
-The authenticated app's content surfaces SHALL present data using the theme's components, choosing the component that matches the feature rather than a single generic layout, and SHALL adapt those components to Pack Mate's data rather than introducing bespoke equivalents.
+The authenticated app's content surfaces SHALL present data using the component that matches the feature rather than a single generic layout, and SHALL adapt that component to Pack Mate's data rather than introducing bespoke equivalents. The trips surface SHALL present trips as a management list; the bag library SHALL present bags as cards; the item library SHALL present items as a table; and the shared-link surface SHALL present records in a list. A record SHALL be activatable by activating the record itself or its title, and not only through a separate action.
 
 #### Scenario: A list surface presents records in the theme's data table
 
-- **WHEN** the user views the trips, bags, items or shared links surface
-- **THEN** the records are presented in the theme's data table with a toolbar, column headers and per-row actions
+- **WHEN** the user views the bags, items or shared links surface
+- **THEN** the records are presented as cards or a table with headers and per-row actions
+
+#### Scenario: The trips surface presents trips as cards
+
+- **WHEN** the user views the trips surface
+- **THEN** each trip is presented as a card showing its destination, dates and status, grouped into current/upcoming and past sections with a featured next departure
+
+#### Scenario: A trip is opened by activating its card
+
+- **WHEN** the user activates a trip's card or its name
+- **THEN** the app opens that trip, while the card's own actions remain usable
+
+#### Scenario: The bag library shows default contents
+
+- **WHEN** the user views the bag library
+- **THEN** each bag is a card showing its default contents and its weight limit
+
+#### Scenario: The item library shows item detail
+
+- **WHEN** the user views the item library
+- **THEN** each item is a table row showing its identity, specification, category, default quantity and mass
 
 #### Scenario: A packing list shows every group together
 
@@ -107,25 +137,6 @@ The authenticated app's content surfaces SHALL present data using the theme's co
 
 - **WHEN** the user reorders entries within a packing list group
 - **THEN** the reorder is performed by dragging a row that uses the theme's row treatment
-
-### Requirement: List surfaces support finding and organising records
-
-Each list surface SHALL let the user narrow and organise its records using the theme's data table capabilities, so a growing library stays workable.
-
-#### Scenario: Search narrows the records
-
-- **WHEN** the user types a query into a list surface's toolbar search
-- **THEN** the table shows only records matching the query
-
-#### Scenario: Columns can be sorted
-
-- **WHEN** the user activates a sortable column header
-- **THEN** the table orders its records by that column
-
-#### Scenario: Columns can be hidden
-
-- **WHEN** the user hides a column through the table's column controls
-- **THEN** that column is no longer shown
 
 ### Requirement: Surfaces present loading and empty states from the visual system
 
@@ -197,3 +208,88 @@ The public shared trip page SHALL present a trip using the same visual system co
 
 - **WHEN** a visitor views a shared list
 - **THEN** the page offers a way to create their own list
+
+### Requirement: The visual system provides light and dark themes
+
+The application SHALL define both a light theme and a dark theme drawn from the Stitch design systems, and SHALL apply the user's chosen theme across the shell, the content surfaces, the auth pages and the landing page.
+
+#### Scenario: Light theme
+
+- **WHEN** the light theme is active
+- **THEN** the app uses the light palette, typography and elevation
+
+#### Scenario: Dark theme
+
+- **WHEN** the dark theme is active
+- **THEN** the app uses the dark palette, typography and elevation, and numeric values use the monospace numeric face
+
+### Requirement: The signed-in app presents a read-only summary home
+
+The signed-in app SHALL present a summary home at the dashboard that composes existing trip data read-only — the number of trips, active and upcoming trips, the next journey with packing progress and weight against bag limits, and a list of upcoming and recent trips — without introducing new data, writes or domain concepts. When the next journey has no items, the progress summary SHALL indicate that rather than showing a bare zero.
+
+#### Scenario: A user opens the summary home
+
+- **WHEN** a signed-in user opens the dashboard
+- **THEN** it shows a summary of their trips drawn from data the app already holds, and a route into a trip
+
+#### Scenario: The summary home does not change data
+
+- **WHEN** the summary home is displayed or used
+- **THEN** no trip, bag, item or packing state is created or modified
+
+### Requirement: Error pages are presented in the visual system
+
+The application SHALL provide not-found and error pages that use the visual system and offer a route back into the product, rather than the browser's default error output.
+
+#### Scenario: A missing route is shown
+
+- **WHEN** a visitor requests a route that does not exist
+- **THEN** they see a not-found page in the visual system with a route back to the app
+
+#### Scenario: An unexpected error is shown
+
+- **WHEN** the app encounters an unexpected error
+- **THEN** the user sees an error page in the visual system with a route back to the app
+
+### Requirement: List surfaces support searching, sorting and filtering
+
+Each list surface SHALL let the user narrow and order its records so a growing library stays workable: a text search, and either column sorting or a sort control; the item library SHALL additionally be filterable by category.
+
+#### Scenario: Search narrows the records
+
+- **WHEN** the user types a query into a list surface's search
+- **THEN** the surface shows only records matching the query
+
+#### Scenario: Records can be ordered
+
+- **WHEN** the user uses the surface's sort control or sortable header
+- **THEN** the surface orders its records accordingly
+
+#### Scenario: The item library can be filtered by category
+
+- **WHEN** the user selects a category filter on the item library
+- **THEN** only items in that category are shown
+
+### Requirement: The chosen theme persists for the user
+
+The system SHALL persist a signed-in user's light or dark theme choice on their account and SHALL apply it when they use the app, so the choice follows them across desktop and mobile rather than living only on one device.
+
+#### Scenario: Choose a theme
+
+- **WHEN** a signed-in user switches between light and dark
+- **THEN** the choice is stored on their account and applied
+
+#### Scenario: Theme follows the user to another device
+
+- **WHEN** a signed-in user opens the app on another device
+- **THEN** their stored theme is applied
+
+#### Scenario: Default theme
+
+- **WHEN** a user has never chosen a theme
+- **THEN** the app uses the default light theme
+
+#### Scenario: An invalid theme is rejected
+
+- **WHEN** a theme other than light or dark is written to a profile
+- **THEN** the system rejects the write

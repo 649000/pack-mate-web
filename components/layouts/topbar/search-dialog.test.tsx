@@ -47,6 +47,7 @@ const bag: ReusableBag = {
   user_id: "u1",
   name: "Passport pouch",
   weight_limit_grams: null,
+  icon: null,
   created_at: "2026-01-01T00:00:00Z",
 };
 

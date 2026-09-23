@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Clock, Coins, Globe, Phone, Plug } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { CountryFlag } from "@/components/ui/country-flag";
 import { getDestinationFacts } from "@/lib/data";
 import { currencySymbol, referenceDate, resolveTimeZones } from "@/lib/destination-facts";
 import type { DestinationFacts } from "@/lib/types";
@@ -115,10 +116,13 @@ export function DestinationInfo({
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 p-4">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Globe className="size-4 text-muted-foreground" aria-hidden="true" />
-          Destination info
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Globe className="size-4 text-muted-foreground" aria-hidden="true" />
+            Destination info
+          </h3>
+          <CountryFlag code={countryCode} className="h-4 w-6" />
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {facts.plug_types.length > 0 || facts.voltage !== null || facts.frequency !== null ? (
             <Field icon={Plug} label="Power">

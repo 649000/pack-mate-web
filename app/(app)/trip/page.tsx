@@ -51,15 +51,9 @@ import { LibraryPicker, type LibraryPickerOption } from "@/components/library-pi
 import { RecordAction } from "@/components/record-action";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardHeading,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CountryFlag } from "@/components/ui/country-flag";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +66,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusChip } from "@/components/ui/status-chip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -145,6 +140,7 @@ import { CategoryFilterChips } from "@/components/packing/category-filter-chips"
 import { PackedFilterChips } from "@/components/packing/packed-filter-chips";
 import { TripCountdown } from "@/components/packing/trip-countdown";
 import { DestinationInfo } from "@/components/packing/destination-info";
+import { SuggestedItems } from "@/components/packing/suggested-items";
 import { WeightByCategoryChart } from "@/components/packing/weight-by-category-chart";
 import { ExportPdfDialog } from "@/components/packing/export-pdf-dialog";
 import { buildTripPdfViewModel } from "@/lib/pdf";
@@ -154,11 +150,13 @@ import {
   shareExpiryToDate,
   type ShareExpiry,
 } from "@/lib/share";
+import { BAG_ICONS, resolveBagIconKey } from "@/lib/bag-icons";
 import { cn } from "@/lib/utils";
 
 function SortableEntry({
   entry,
   bags,
+  unit,
   onTogglePacked,
   onMove,
   onChangeQty,
@@ -167,6 +165,7 @@ function SortableEntry({
 }: {
   entry: TripEntry;
   bags: TripBag[];
+  unit: DisplayWeightUnit;
   onTogglePacked: (entry: TripEntry) => void;
   onMove: (entry: TripEntry, destination: Destination) => void;
   onChangeQty: (entry: TripEntry, qty: number) => void;
@@ -190,7 +189,11 @@ function SortableEntry({
     <div
       ref={setNodeRef}
       style={style}
-      className="rounded-md px-2 py-2 transition-colors hover:bg-muted/40"
+      className={cn(
+        "rounded-md border border-transparent px-2 py-2 transition-colors hover:bg-muted/40",
+        entry.is_with_me && "border-s-2 border-s-with-me",
+        entry.is_packed && "bg-packed-soft/40",
+      )}
     >
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -219,6 +222,8 @@ function SortableEntry({
               {entry.name}
             </span>
             <CategoryBadge category={entry.category} />
+            {entry.is_with_me ? <StatusChip status="withMe">With Me</StatusChip> : null}
+            {entry.is_packed ? <StatusChip status="packed">Packed</StatusChip> : null}
           </div>
           {nestedPath ? (
             <span className="truncate text-xs text-muted-foreground">{nestedPath}</span>
@@ -229,10 +234,15 @@ function SortableEntry({
           min={1}
           step={1}
           defaultValue={entry.qty}
-          className="h-7 w-14 px-2 text-xs"
+          className="h-7 w-14 px-2 font-mono text-xs tabular-nums"
           aria-label={`Quantity for ${entry.name}`}
           onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
         />
+        {entry.weight_grams !== null ? (
+          <span className="font-mono text-xs text-muted-foreground tabular-nums">
+            {formatWeight(entry.weight_grams, unit)}
+          </span>
+        ) : null}
         <select
           className="h-7 rounded-md border border-input bg-background px-2 text-xs"
           value={locationValue(entry)}
@@ -370,6 +380,7 @@ function EntryGroup({
                   key={entry.id}
                   entry={entry}
                   bags={bags}
+                  unit={unit}
                   onTogglePacked={onTogglePacked}
                   onMove={onMove}
                   onChangeQty={onChangeQty}
@@ -571,6 +582,7 @@ export function TripView() {
         id: item.id,
         name: item.name,
         detail: item.category ? ITEM_CATEGORY_LABELS[item.category] : undefined,
+        category: item.category,
       })),
     [libraryItems],
   );
@@ -708,12 +720,20 @@ export function TripView() {
       const eligibleParents = bags.filter(
         (candidate) => candidate.id !== node.bag.id && !descendants.has(candidate.id),
       );
+      const bagEntries = entriesByBag.get(node.bag.id) ?? [];
+      const bagIcon =
+        BAG_ICONS[
+          resolveBagIconKey(
+            node.bag.icon,
+            bagEntries.map((entry) => entry.category),
+          )
+        ];
       return (
         <div key={node.bag.id} className="flex flex-col gap-4">
           <EntryGroup
             title={node.bag.name}
-            icon={Luggage}
-            entries={entriesByBag.get(node.bag.id) ?? []}
+            icon={bagIcon}
+            entries={bagEntries}
             bags={bags}
             unit={unit}
             weight={sumBagWeight(node.bag, bags, entries)}
@@ -842,9 +862,10 @@ export function TripView() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-7">
       <PageHeader
         title={trip.name}
+        titleAddon={<CountryFlag code={trip.country_code} className="h-6 w-8" />}
         description={formatDestination(trip.destination, trip.country_code) ?? undefined}
         breadcrumb={[
           { label: "Packing" },
@@ -877,7 +898,7 @@ export function TripView() {
 
       <Card>
         <CardContent className="flex items-center gap-4 p-5">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
             <PackageCheck className="size-5" aria-hidden="true" />
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -927,6 +948,13 @@ export function TripView() {
         countryCode={trip.country_code}
         destination={trip.destination}
         startDate={trip.start_date}
+      />
+
+      <SuggestedItems
+        trip={trip}
+        entries={entries}
+        libraryItems={libraryItems}
+        onChanged={refresh}
       />
 
       <Card>
@@ -1016,7 +1044,7 @@ export function TripView() {
           />
         )
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-7">
           {search.trim() ? (
             <p className="px-2 text-sm font-medium text-foreground">
               {filteredEntries.length} {filteredEntries.length === 1 ? "match" : "matches"}

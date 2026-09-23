@@ -1,5 +1,6 @@
 import { isCountryCode } from "./countries";
-import type { DisplayWeightUnit, Gender, ItemCategory } from "./types";
+import { isBagIcon, type BagIcon } from "./bag-icons";
+import type { DisplayWeightUnit, Gender, ItemCategory, ProfileTheme } from "./types";
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -14,6 +15,8 @@ export const GENDERS = [
   "other",
   "prefer_not_to_say",
 ] as const satisfies readonly Gender[];
+
+export const THEMES = ["light", "dark"] as const satisfies readonly ProfileTheme[];
 
 // The canonical fixed set of item categories. The database check constraints
 // mirror this list; keep the two in sync.
@@ -93,6 +96,21 @@ export function validateName(value: string, field = "Name"): string {
     throw new ValidationError(`${field} cannot exceed ${MAX_NAME_LENGTH} characters`);
   }
   return trimmed;
+}
+
+// A bag icon is optional; null/empty clears it. Any other value must be one of
+// the known keys, mirroring the database check constraint.
+export function validateBagIcon(value: string | null | undefined): BagIcon | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (!isBagIcon(value)) {
+    throw new ValidationError("Unknown bag icon");
+  }
+  return value;
+}
+
+export function validateTheme(value: string | null | undefined): ProfileTheme {
+  if (value === "light" || value === "dark") return value;
+  throw new ValidationError("Theme must be light or dark");
 }
 
 export function validateQty(value: number, field = "Quantity"): number {

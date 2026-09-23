@@ -2,16 +2,22 @@ import { expect, test } from "@playwright/test";
 
 test("landing page is public", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /pack smarter for/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /pack lighter/i })).toBeVisible();
   await expect(page.getByRole("link", { name: /get started for free/i }).first()).toBeVisible();
 });
 
 test("landing shows the marketing sections", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /pack smarter for/i })).toBeVisible();
-  await expect(page.getByText(/simple & transparent pricing/i)).toBeVisible();
-  await expect(page.getByRole("heading", { name: /loved by thousands/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /contact us/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /pack lighter/i })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /purpose-built for how you actually travel/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /six features designed for real trips/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /peace of mind from departure gate to hostel/i }),
+  ).toBeVisible();
 });
 
 test("landing call to action leads to sign-in", async ({ page }) => {

@@ -32,7 +32,11 @@ export function AccountView() {
 
   return (
     <div className="flex max-w-4xl flex-col gap-5">
-      <PageHeader title="Account" description="Manage your profile, security and data." />
+      <PageHeader
+        title="Account"
+        description="Manage your profile, security and data."
+        breadcrumb={[{ label: "Pack Mate" }, { label: "Account" }]}
+      />
       <div className="grid gap-5">
         <PersonalInfoCard profile={profile} loading={loading} onSaved={refresh} />
         <AccountCard onChanged={refresh} />

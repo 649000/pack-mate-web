@@ -9,20 +9,22 @@ export interface BreadcrumbItem {
 
 export function PageHeader({
   title,
+  titleAddon,
   description,
   breadcrumb,
   children,
 }: {
   title: string;
+  titleAddon?: ReactNode;
   description?: string;
   breadcrumb?: BreadcrumbItem[];
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-5 pb-7.5">
-      <div className="flex flex-col justify-center gap-2">
+    <div className="flex flex-col gap-4 pb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-2">
         {breadcrumb && breadcrumb.length > 0 && (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground lg:text-sm">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {breadcrumb.map((item, index) => {
               const last = index === breadcrumb.length - 1;
               return (
@@ -34,20 +36,21 @@ export function PageHeader({
                   ) : (
                     <span className={last ? "text-foreground" : undefined}>{item.label}</span>
                   )}
-                  {!last && <ChevronRight className="size-3.5 text-muted-foreground" />}
+                  {!last && <ChevronRight className="size-3 text-muted-foreground" />}
                 </span>
               );
             })}
           </div>
         )}
-        <h1 className="text-xl leading-none font-medium text-foreground">{title}</h1>
+        <h1 className="flex items-center gap-2 font-heading text-2xl leading-tight font-bold tracking-tight text-foreground sm:text-3xl">
+          {titleAddon}
+          {title}
+        </h1>
         {description && (
-          <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
-            {description}
-          </div>
+          <p className="max-w-2xl text-sm font-normal text-muted-foreground">{description}</p>
         )}
       </div>
-      {children && <div className="flex items-center gap-2.5">{children}</div>}
+      {children && <div className="flex flex-wrap items-center gap-2.5">{children}</div>}
     </div>
   );
 }

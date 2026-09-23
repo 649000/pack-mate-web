@@ -35,8 +35,14 @@ vi.mock("@/lib/data", () => ({
   getActiveShareLink: vi.fn(),
   regenerateShareLink: vi.fn(),
   getDestinationFacts: vi.fn(),
+  listSuggestionDismissals: vi.fn(),
+  dismissSuggestion: vi.fn(),
   duplicateTrip: vi.fn(),
   setTripPacked: vi.fn(),
+}));
+
+vi.mock("@/lib/suggestions", () => ({
+  getTripSuggestions: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("sonner", () => ({
@@ -66,6 +72,7 @@ const bag: TripBag = {
   position: 0,
   weight_limit_grams: null,
   parent_bag_id: null,
+  icon: null,
 };
 
 const libraryBag: ReusableBag = {
@@ -73,6 +80,7 @@ const libraryBag: ReusableBag = {
   user_id: "u1",
   name: "Main backpack",
   weight_limit_grams: null,
+  icon: null,
   created_at: "2026-01-01T00:00:00Z",
 };
 
@@ -430,11 +438,11 @@ describe("TripView", () => {
     render(<TripView />);
     await screen.findByText("Charger");
     const card = bagCard("Electronics");
-    await within(card).findByText("1.00 kg");
+    await within(card).findAllByText("1.00 kg");
 
     await user.click(screen.getByRole("button", { name: /switch weight unit/i }));
 
-    expect(await within(card).findByText("2.20 lb")).toBeInTheDocument();
+    expect((await within(card).findAllByText("2.20 lb")).length).toBeGreaterThan(0);
   });
 
   const suitcase: TripBag = { ...bag, id: "b1", name: "Suitcase", parent_bag_id: null };
@@ -874,5 +882,16 @@ describe("TripView", () => {
     expect(data.updateEntry).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Quantity for Passport")).toHaveValue(3);
     expect(screen.getByLabelText("Location")).toHaveValue("with_me");
+  });
+
+  it("shows an entry's weight in its row", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripEntries).mockResolvedValue([
+      entry({ id: "e1", name: "Charger", weight_grams: 1200 }),
+    ]);
+    render(<TripView />);
+
+    const row = (await screen.findByText("Charger")).closest("div.rounded-md") as HTMLElement;
+    expect(within(row).getByText("1.20 kg")).toBeInTheDocument();
   });
 });

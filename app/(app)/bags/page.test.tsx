@@ -1,7 +1,7 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReusableBag, ReusableItem } from "@/lib/types";
+import type { ReusableBag, ReusableItem, Trip } from "@/lib/types";
 
 const params = vi.hoisted(() => ({ current: "" }));
 
@@ -12,13 +12,17 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/data", () => ({
   listBags: vi.fn(),
   listItems: vi.fn(),
+  listAllBagItems: vi.fn(),
   getProfile: vi.fn(),
   createBag: vi.fn(),
   updateBag: vi.fn(),
   deleteBag: vi.fn(),
+  duplicateBag: vi.fn(),
   listBagContents: vi.fn(),
   addBagItem: vi.fn(),
   removeBagItem: vi.fn(),
+  listTrips: vi.fn(),
+  addLibraryBagToTrip: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({
@@ -33,6 +37,7 @@ const bag: ReusableBag = {
   user_id: "u1",
   name: "Electronics",
   weight_limit_grams: null,
+  icon: null,
   created_at: "2026-01-01T00:00:00Z",
 };
 
@@ -49,12 +54,25 @@ const item: ReusableItem = {
   created_at: "2026-01-01T00:00:00Z",
 };
 
+const trip: Trip = {
+  id: "t1",
+  user_id: "u1",
+  name: "Japan",
+  destination: null,
+  country_code: "JP",
+  start_date: null,
+  end_date: null,
+  created_at: "2026-01-01T00:00:00Z",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   params.current = "";
   vi.mocked(data.listItems).mockResolvedValue([]);
   vi.mocked(data.getProfile).mockResolvedValue(null);
   vi.mocked(data.listBagContents).mockResolvedValue([]);
+  vi.mocked(data.listAllBagItems).mockResolvedValue([]);
+  vi.mocked(data.listTrips).mockResolvedValue([]);
 });
 
 describe("BagsView", () => {
@@ -82,7 +100,32 @@ describe("BagsView", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(data.createBag).toHaveBeenCalledWith({ name: "Electronics", weightLimitGrams: null }),
+      expect(data.createBag).toHaveBeenCalledWith({
+        name: "Electronics",
+        weightLimitGrams: null,
+        icon: null,
+      }),
+    );
+  });
+
+  it("saves a chosen icon", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([]);
+    vi.mocked(data.createBag).mockResolvedValue({ ...bag, icon: "camera" });
+    const user = userEvent.setup();
+    render(<BagsView />);
+    await screen.findByText(/no bags yet/i);
+
+    await user.click(screen.getByRole("button", { name: /add bag/i }));
+    await user.type(await screen.findByLabelText("Name"), "Camera kit");
+    await user.click(screen.getByRole("button", { name: "Camera" }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(data.createBag).toHaveBeenCalledWith({
+        name: "Camera kit",
+        weightLimitGrams: null,
+        icon: "camera",
+      }),
     );
   });
 
@@ -99,7 +142,11 @@ describe("BagsView", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(data.createBag).toHaveBeenCalledWith({ name: "Main", weightLimitGrams: 23000 }),
+      expect(data.createBag).toHaveBeenCalledWith({
+        name: "Main",
+        weightLimitGrams: 23000,
+        icon: null,
+      }),
     );
   });
 
@@ -145,6 +192,38 @@ describe("BagsView", () => {
     await waitFor(() => expect(data.addBagItem).toHaveBeenCalledWith("b1", "i1", 1));
   });
 
+  it("adds a library bag to a trip", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    vi.mocked(data.listTrips).mockResolvedValue([trip]);
+    vi.mocked(data.addLibraryBagToTrip).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<BagsView />);
+
+    await screen.findByText("Electronics");
+    await user.click(screen.getByRole("button", { name: "Add to trip" }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /add to trip/i }));
+
+    await waitFor(() => expect(data.addLibraryBagToTrip).toHaveBeenCalledWith("t1", "b1"));
+  });
+
+  it("duplicates a bag", async () => {
+    vi.mocked(data.listBags).mockResolvedValue([bag]);
+    vi.mocked(data.duplicateBag).mockResolvedValue({
+      ...bag,
+      id: "b2",
+      name: "Electronics (copy)",
+    });
+    const user = userEvent.setup();
+    render(<BagsView />);
+
+    await screen.findByText("Electronics");
+    await user.click(screen.getByRole("button", { name: "Duplicate" }));
+
+    await waitFor(() => expect(data.duplicateBag).toHaveBeenCalledWith("b1"));
+  });
+
   it("edits a bag", async () => {
     vi.mocked(data.listBags).mockResolvedValue([bag]);
     vi.mocked(data.updateBag).mockResolvedValue({ ...bag, name: "Gear" });
@@ -162,6 +241,7 @@ describe("BagsView", () => {
       expect(data.updateBag).toHaveBeenCalledWith("b1", {
         name: "Gear",
         weightLimitGrams: null,
+        icon: null,
       }),
     );
   });

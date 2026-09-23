@@ -108,7 +108,7 @@ test.describe("authenticated critical path", () => {
 
     // Delete the trip.
     await page.goto("/trips");
-    await expect(page).toHaveURL(/\/trips$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
     await page.getByRole("button", { name: /^delete$/i }).click();
     await page
       .getByRole("button", { name: /^delete$/i })
@@ -122,17 +122,14 @@ test.describe("authenticated critical path", () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/trips");
-    await expect(page.getByRole("button", { name: /^bags$/i }).first()).toBeVisible();
-    await page
-      .getByRole("button", { name: /shared links/i })
-      .first()
-      .click();
+    await expect(page.getByRole("link", { name: /^bag library$/i })).toBeVisible();
+    await page.getByRole("link", { name: /shared links/i }).click();
     await expect(page).toHaveURL(/\/shares$/);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/trips");
-    await page.getByRole("button", { name: /open navigation/i }).click();
-    await expect(page.getByRole("button", { name: /^items$/i }).last()).toBeVisible();
+    await page.getByRole("link", { name: /^items$/i }).click();
+    await expect(page).toHaveURL(/\/items$/);
   });
 
   test("empty states and responsive layout across app screens", async ({ page }) => {

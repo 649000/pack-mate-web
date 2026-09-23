@@ -1,68 +1,49 @@
 import { motion } from "framer-motion";
-import confetti from "canvas-confetti";
-import { Button } from "@/components/landing/ui/button";
-import { Boxes } from "@/components/landing/ui/background-boxes";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
+import { Button } from "@/components/landing/ui/button";
 
 const CallToAction = () => {
-  const handleConfetti = () => {
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
-  };
-
   return (
-    <section className="h-96 relative w-full overflow-hidden bg-zinc-900 flex flex-col items-center justify-center">
-      <div className="absolute inset-0 w-full h-full bg-zinc-900 z-20 [mask-image:radial-gradient(transparent,white)] pointer-events-none" />
-      <Boxes />
+    <section
+      id="get-started"
+      className="scroll-mt-20 bg-background px-4 py-20 sm:px-6 sm:py-24 lg:px-8"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        viewport={{ once: true }}
+        className="relative mx-auto w-full max-w-7xl overflow-hidden rounded-2xl bg-primary px-6 py-14 text-center sm:px-12 sm:py-20"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,var(--color-primary-foreground)_1px,transparent_0)] [background-size:24px_24px]"
+        />
 
-      <div className="container mx-auto px-6 text-center relative z-10">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          viewport={{ once: true }}
-        >
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            viewport={{ once: true }}
-            className="text-white/80 font-semibold text-sm uppercase tracking-wide mb-6"
-          >
-            Ready to get started?
-          </motion.p>
-
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            viewport={{ once: true }}
-            className="text-4xl md:text-5xl font-bold text-white mb-10"
-          >
-            Start packing smarter today.
-          </motion.h2>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            viewport={{ once: true }}
-          >
+        <div className="relative">
+          <h2 className="font-heading text-3xl font-bold tracking-tight text-balance text-primary-foreground sm:text-4xl">
+            Ready to master your luggage?
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-base text-pretty text-primary-foreground/80 sm:text-lg">
+            Start a free packing list, reuse your gear on every trip, and know exactly where
+            everything is.
+          </p>
+          <div className="mt-8 flex justify-center">
             <Button
-              variant="outline"
-              size="lg"
-              className="font-semibold"
-              onMouseEnter={handleConfetti}
               asChild
+              size="lg"
+              className="w-full bg-background text-foreground hover:bg-background/90 sm:w-auto"
             >
-              <Link href="/sign-in">Get started for free</Link>
+              <Link href="/sign-in">
+                Get started for free
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
             </Button>
-          </motion.div>
-        </motion.div>
-      </div>
+          </div>
+        </div>
+      </motion.div>
     </section>
   );
 };

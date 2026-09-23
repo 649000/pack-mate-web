@@ -8,7 +8,12 @@ export function CustomSubtitle({
   className?: string;
 }) {
   return (
-    <p className={cn("text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto", className)}>
+    <p
+      className={cn(
+        "mx-auto max-w-2xl text-base text-pretty text-muted-foreground sm:text-lg",
+        className,
+      )}
+    >
       {children}
     </p>
   );

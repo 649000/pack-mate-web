@@ -1,96 +1,59 @@
-import { motion } from "framer-motion";
-import { Globe, X, Send, Mail } from "lucide-react";
-import { Separator } from "@/components/landing/ui/separator";
+import Link from "next/link";
+
 import Logo from "@/components/landing/logo";
 
+const footerLinks = {
+  Product: [
+    { label: "Features", href: "#features" },
+    { label: "How it works", href: "#how-it-works" },
+    { label: "Compare", href: "#compare" },
+    { label: "Get started", href: "/sign-in" },
+  ],
+  Legal: [
+    { label: "Privacy", href: "#privacy" },
+    { label: "Terms", href: "#terms" },
+    { label: "Security", href: "#security" },
+    { label: "Contact", href: "mailto:hello@packmate.app" },
+  ],
+};
+
 const Footer = () => {
-  const links = {
-    product: ["Features", "Pricing", "FAQ", "Sign in"],
-    company: ["Trips", "Bags", "Items", "Contact"],
-    support: ["Getting started", "Privacy", "Terms", "Security"],
-  };
-
-  const socialLinks = [
-    { icon: X, href: "#", label: "X (Twitter)" },
-    { icon: Globe, href: "#", label: "Website" },
-    { icon: Send, href: "#", label: "Newsletter" },
-    { icon: Mail, href: "#", label: "Email" },
-  ];
-
   return (
-    <footer className="bg-background relative overflow-hidden">
-      <div className="container px-6 mx-auto pt-14 pb-6 border-b border-border/50">
-        <div className="flex flex-col lg:flex-row justify-between items-start">
-          {/* Logo and description - Left side */}
-          <div className="lg:w-1/3 mb-12 lg:mb-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-            >
-              <div className="flex items-center mb-3">
-                <Logo />
-              </div>
-              <p className="text-muted-foreground mb-6 max-w-sm">
-                Build reusable bags and items once, then pack them into a list for any trip.
-              </p>
-              <div className="flex space-x-4">
-                {socialLinks.map((social, index) => (
-                  <motion.a
-                    key={index}
-                    href={social.href}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="size-9 border border-border/60 text-muted-foreground rounded-md flex items-center justify-center hover:text-foreground transition-colors"
-                    aria-label={social.label}
-                  >
-                    <social.icon className="size-4" />
-                  </motion.a>
-                ))}
-              </div>
-            </motion.div>
+    <footer className="border-t border-border/60 bg-background">
+      <div className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+        <div className="grid gap-10 lg:grid-cols-[2fr_1fr_1fr]">
+          <div className="max-w-sm">
+            <Logo />
+            <p className="mt-4 text-sm text-pretty text-muted-foreground">
+              Build reusable bags and items once, then pack a list for any trip. Simple packing
+              lists, wherever you are.
+            </p>
           </div>
 
-          {/* 3 Column Menu - Right aligned */}
-          <div className="w-full grow lg:w-auto lg:grow-0 lg:w-2/3 flex justify-end">
-            <div className="w-full lg:w-auto flex justify-between flex-wrap lg:grid lg:grid-cols-3 gap-8 lg:gap-16">
-              {Object.entries(links).map(([category, items], categoryIndex) => (
-                <motion.div
-                  key={category}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: categoryIndex * 0.1 }}
-                  viewport={{ once: true }}
-                >
-                  <h3 className="font-medium text-base mb-4 capitalize text-muted-foreground/80">
-                    {category}
-                  </h3>
-                  <ul className="text-base space-y-2">
-                    {items.map((item, index) => (
-                      <li key={index}>
-                        <a
-                          href="#"
-                          className="text-accent-foreground hover:text-indigo-600 transition-colors hover:underline"
-                        >
-                          {item}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </motion.div>
-              ))}
+          {Object.entries(footerLinks).map(([category, links]) => (
+            <div key={category} className="min-w-0">
+              <h3 className="font-heading text-sm font-semibold text-foreground">{category}</h3>
+              <ul className="mt-4 space-y-3">
+                {links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </div>
+          ))}
         </div>
 
-        <Separator className="my-6 bg-border/50" />
-
-        <div className="flex flex-col md:flex-row justify-between items-center">
-          <p className="text-muted-foreground text-sm">© 2026 Pack Mate. All rights reserved.</p>
-          <p className="text-muted-foreground text-sm mt-4 md:mt-0">
-            Simple packing lists for every trip.
+        <div className="mt-12 flex flex-col gap-2 border-t border-border/60 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            © {new Date().getFullYear()} Pack Mate. All rights reserved.
           </p>
+          <p className="text-sm text-muted-foreground">Simple packing lists for every trip.</p>
         </div>
       </div>
     </footer>
