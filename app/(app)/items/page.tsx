@@ -7,9 +7,9 @@ import {
   BadgeCheck,
   ChevronLeft,
   ChevronRight,
+  ListPlus,
   Package,
   Pencil,
-  Plane,
   Plus,
   SearchX,
   Tags,
@@ -467,7 +467,7 @@ export function ItemsView() {
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
                         <RecordAction
-                          icon={Plane}
+                          icon={ListPlus}
                           label="Add to trip"
                           onClick={() => setAddTarget(item)}
                         />
@@ -491,7 +491,7 @@ export function ItemsView() {
               {sortedItems.length === 1 ? "item" : "items"}
             </span>
             {pageCount > 1 ? (
-              <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"

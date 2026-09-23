@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Luggage, PackageOpen, Pencil, Plane, Plus, Trash2 } from "lucide-react";
+import { Copy, ListPlus, Luggage, PackageOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import { AddToTripDialog } from "@/components/add-to-trip-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { RecordAction } from "@/components/record-action";
@@ -374,7 +374,7 @@ export function BagsView() {
                           Manage contents
                         </Button>
                         <RecordAction
-                          icon={Plane}
+                          icon={ListPlus}
                           label="Add to trip"
                           onClick={() => setAddTarget(bag)}
                         />

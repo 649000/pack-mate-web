@@ -34,7 +34,13 @@ export function CategoryFilterChips<E extends { category: ItemCategory | null }>
   }
 
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+    <div
+      role="group"
+      aria-label={label}
+      // One scrollable row on small screens; wraps to show everything on wide
+      // screens. Avoids a tall stack of chips on mobile and clipping on desktop.
+      className="flex min-w-0 gap-1.5 overflow-x-auto py-0.5 lg:flex-wrap lg:overflow-x-visible"
+    >
       {chips.map((chip) => (
         <Button
           key={chip.value}
@@ -43,6 +49,7 @@ export function CategoryFilterChips<E extends { category: ItemCategory | null }>
           variant={value === chip.value ? "primary" : "outline"}
           aria-pressed={value === chip.value}
           onClick={() => onChange(chip.value)}
+          className="shrink-0"
         >
           {chip.label}
         </Button>

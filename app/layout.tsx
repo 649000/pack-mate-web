@@ -39,8 +39,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <ThemeSync />
             {children}
           </AuthProvider>
+          {/* Inside the provider so toasts follow the app's light/dark theme. */}
+          <Toaster />
         </ThemeProvider>
-        <Toaster />
       </body>
     </html>
   );
