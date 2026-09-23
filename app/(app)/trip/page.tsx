@@ -57,6 +57,16 @@ import { EmptyState } from "@/components/empty-state";
 import { ListSearchToolbar } from "@/components/list-search";
 import { LibraryPicker, type LibraryPickerOption } from "@/components/library-picker";
 import { RecordAction } from "@/components/record-action";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/layouts/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -90,6 +100,7 @@ import {
   addLibraryItemToTrip,
   createShareLink,
   deleteEntry,
+  deleteTrip,
   duplicateTrip,
   getActiveShareLink,
   getProfile,
@@ -481,6 +492,8 @@ export function TripView() {
   const [shareExpiry, setShareExpiry] = useState<ShareExpiry>("never");
   const [shareBusy, setShareBusy] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [duplicateName, setDuplicateName] = useState("");
   const [duplicateDestination, setDuplicateDestination] = useState("");
@@ -946,6 +959,19 @@ export function TripView() {
     }
   }
 
+  async function handleDeleteTrip() {
+    if (!trip) return;
+    setDeleting(true);
+    try {
+      await deleteTrip(trip.id);
+      toast.success("Trip deleted");
+      router.push("/trips");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete trip");
+      setDeleting(false);
+    }
+  }
+
   if (!tripId) {
     return <p className="text-sm text-muted-foreground">No trip selected.</p>;
   }
@@ -1025,6 +1051,7 @@ export function TripView() {
           <RecordAction icon={Copy} label="Duplicate" onClick={openDuplicate} />
           <RecordAction icon={Share2} label="Share" onClick={openShare} />
           <RecordAction icon={Download} label="Download PDF" onClick={() => setPdfOpen(true)} />
+          <RecordAction icon={Trash2} label="Delete trip" onClick={() => setDeleteOpen(true)} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -1644,6 +1671,23 @@ export function TripView() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this trip?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes &ldquo;{trip.name}&rdquo; and its packing list. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={deleting} onClick={() => void handleDeleteTrip()}>
+              {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ExportPdfDialog
         open={pdfOpen}

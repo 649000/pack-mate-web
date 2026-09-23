@@ -27,6 +27,7 @@ vi.mock("@/lib/data", () => ({
   addLibraryItemToTrip: vi.fn(),
   addAdHocEntry: vi.fn(),
   deleteEntry: vi.fn(),
+  deleteTrip: vi.fn(),
   reorderEntries: vi.fn(),
   setBagParent: vi.fn(),
   setEntryLocation: vi.fn(),
@@ -821,6 +822,24 @@ describe("TripView", () => {
         endDate: null,
       }),
     );
+  });
+
+  it("deletes the trip from the header after confirmation", async () => {
+    vi.mocked(data.getTrip).mockResolvedValue(trip);
+    vi.mocked(data.listTripBags).mockResolvedValue([]);
+    vi.mocked(data.listTripEntries).mockResolvedValue([]);
+    vi.mocked(data.deleteTrip).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<TripView />);
+
+    await user.click(await screen.findByRole("button", { name: /delete trip/i }));
+
+    const dialog = within(await screen.findByRole("alertdialog"));
+    expect(dialog.getByText(/delete this trip/i)).toBeInTheDocument();
+    await user.click(dialog.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(data.deleteTrip).toHaveBeenCalledWith("t1"));
+    await waitFor(() => expect(router.push).toHaveBeenCalledWith("/trips"));
   });
 
   it("does not duplicate when the header prompt is cancelled", async () => {
