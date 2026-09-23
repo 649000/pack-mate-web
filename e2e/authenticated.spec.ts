@@ -30,7 +30,12 @@ async function pickLibraryOption(page: Page, label: string, name: string): Promi
 
 // Adding happens in a dialog with one tab per input mode.
 async function openAddDialog(page: Page, tab: RegExp): Promise<void> {
+  // The add dialog only closes once its RPC resolves, so wait for a previous
+  // dialog to finish before clicking the trigger again; otherwise the overlay
+  // swallows the click on a slow backend.
+  await expect(page.getByRole("dialog")).toBeHidden();
   await page.getByRole("button", { name: /add to trip/i }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("tab", { name: tab }).click();
 }
 
