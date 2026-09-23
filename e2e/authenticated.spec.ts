@@ -17,7 +17,7 @@ async function signUp(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: /create account/i }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 // The library pickers are searchable, so options are chosen by typing rather
@@ -108,7 +108,7 @@ test.describe("authenticated critical path", () => {
 
     // Delete the trip.
     await page.goto("/trips");
-    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page).toHaveURL(/\/trips$/);
     await page.getByRole("button", { name: /^delete$/i }).click();
     await page
       .getByRole("button", { name: /^delete$/i })
