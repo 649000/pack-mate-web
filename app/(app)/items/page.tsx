@@ -491,7 +491,7 @@ export function ItemsView() {
               {sortedItems.length === 1 ? "item" : "items"}
             </span>
             {pageCount > 1 ? (
-          <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
