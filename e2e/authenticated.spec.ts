@@ -84,6 +84,20 @@ function tripLink(page: Page, name: string) {
   return page.getByRole("link", { name, exact: true });
 }
 
+// Opens the PDF export dialog. On narrow screens the header collapses its
+// toolbar into a "Trip actions" menu, so the action lives behind that menu.
+async function openPdfDialog(page: Page): Promise<void> {
+  const direct = page.getByRole("button", { name: /download pdf/i });
+  const menu = page.getByRole("button", { name: /trip actions/i });
+  await expect(direct.or(menu)).toBeVisible();
+  if (await direct.isVisible()) {
+    await direct.click();
+    return;
+  }
+  await menu.click();
+  await page.getByRole("menuitem", { name: /download pdf/i }).click();
+}
+
 // Exports the current trip as a PDF and returns the downloaded bytes. The blank
 // sheet is the dialog default, so only match mode needs an extra click.
 async function exportPdf(
@@ -91,7 +105,7 @@ async function exportPdf(
   mode: "blank" | "packed" = "blank",
 ): Promise<{ bytes: Buffer; filename: string }> {
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /download pdf/i }).click();
+  await openPdfDialog(page);
   if (mode === "packed") {
     await page.getByRole("radio", { name: /tick packed items/i }).click();
   }
@@ -594,15 +608,18 @@ test.describe("authenticated critical path", () => {
     // Mark the entry With Me.
     const passportRow = qty.locator("..");
     await passportRow.getByLabel("Location").selectOption("with_me");
-    await expect(page.getByRole("region", { name: "With Me" }).getByText("Passport")).toBeVisible();
+    const withMe = page.getByRole("region", { name: "With Me" });
+    await expect(withMe.getByText("Passport")).toBeVisible();
 
     // Pack it.
-    await passportRow.getByRole("checkbox").click();
+    await withMe.getByRole("checkbox", { name: /mark packed/i }).click();
     await expect(page.getByRole("checkbox", { name: /mark unpacked/i })).toBeVisible();
 
     // Remove the other entry.
-    const adapterRow = page.getByLabel("Quantity for Adapter").locator("..");
-    await adapterRow.getByRole("button", { name: /^remove$/i }).click();
+    await page
+      .getByRole("region", { name: "Not assigned" })
+      .getByRole("button", { name: /^remove$/i })
+      .click();
     await expect(page.getByLabel("Quantity for Adapter")).toHaveCount(0);
   });
 
@@ -797,7 +814,7 @@ test.describe("authenticated critical path", () => {
 
       // The PDF export dialog must not overflow either.
       await page.goto(tripUrl);
-      await page.getByRole("button", { name: /download pdf/i }).click();
+      await openPdfDialog(page);
       const dialogOverflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,
       );
