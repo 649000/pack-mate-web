@@ -8,6 +8,12 @@ import { expect, test, type Page } from "@playwright/test";
 // openspec/changes/harden-test-and-delivery-pipeline/design.md.
 const enabled = process.env.E2E_AUTH === "1";
 
+// Firebase throttles account creation per IP; once it trips, accounts:signUp
+// answers 400 TOO_MANY_ATTEMPTS_TRY_LATER (auth/too-many-requests) and keeps
+// blocking the IP for minutes. Because this flow signs up a disposable user per
+// test, a repeated run from one IP can be blocked, so report that explicitly
+// rather than failing as a generic /dashboard navigation timeout. The flow is
+// expected to run once per deploy from a fresh runner.
 async function signUp(page: Page): Promise<void> {
   const email = `packmate-e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
   // Random per run so no credential literal lives in the repo.
@@ -16,8 +22,27 @@ async function signUp(page: Page): Promise<void> {
   await page.getByRole("button", { name: /create one/i }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
+  const signUpResponse = page
+    .waitForResponse(
+      (response) => response.url().includes("accounts:signUp") && response.status() === 400,
+    )
+    .catch(() => null);
   await page.getByRole("button", { name: /create account/i }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  try {
+    await expect(page).toHaveURL(/\/dashboard$/);
+  } catch (error) {
+    const response = await signUpResponse;
+    if (response && (await response.text()).includes("TOO_MANY_ATTEMPTS_TRY_LATER")) {
+      throw new Error(
+        "Firebase rate-limited account creation from this IP (TOO_MANY_ATTEMPTS_TRY_LATER). " +
+          "The authenticated suite creates a disposable user per test, so it is quota-sensitive: " +
+          "wait for the block to clear or run from a fresh network. It is intended to run once per " +
+          "deploy from a fresh CI runner.",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 // The library pickers are searchable, so options are chosen by typing rather
