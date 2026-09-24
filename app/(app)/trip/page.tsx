@@ -84,6 +84,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input, inputVariants } from "@/components/ui/input";
@@ -229,94 +230,140 @@ function SortableEntry({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "rounded-md border border-transparent px-2 py-2 transition-colors hover:bg-muted/40",
+        "rounded-md border border-transparent px-1.5 py-2 transition-colors hover:bg-muted/40 sm:px-2",
         entry.is_with_me && "border-s-2 border-s-with-me",
         entry.is_packed && "bg-packed-soft/40",
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="cursor-grab touch-none rounded-sm px-1 text-muted-foreground hover:text-foreground"
-          aria-label="Reorder"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-4" aria-hidden="true" />
-        </button>
-        <Checkbox
-          checked={entry.is_packed}
-          onCheckedChange={() => onTogglePacked(entry)}
-          aria-label={entry.is_packed ? "Mark unpacked" : "Mark packed"}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={
-                entry.is_packed
-                  ? "text-sm text-muted-foreground line-through"
-                  : "text-sm text-foreground"
-              }
-            >
-              {entry.name}
-            </span>
-            <CategoryBadge category={entry.category} />
-            {entry.is_with_me ? <StatusChip status="withMe">With Me</StatusChip> : null}
-            {entry.is_packed ? <StatusChip status="packed">Packed</StatusChip> : null}
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-2 sm:items-center">
+        <div className="flex min-w-0 flex-1 items-start gap-1.5 sm:items-center">
+          <button
+            type="button"
+            className="cursor-grab touch-none rounded-sm p-1 text-muted-foreground hover:text-foreground"
+            aria-label="Reorder"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-4" aria-hidden="true" />
+          </button>
+          <Checkbox
+            checked={entry.is_packed}
+            onCheckedChange={() => onTogglePacked(entry)}
+            aria-label={entry.is_packed ? "Mark unpacked" : "Mark packed"}
+            className="mt-0.5 sm:mt-0"
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
+              <span
+                className={
+                  entry.is_packed
+                    ? "text-sm text-muted-foreground line-through"
+                    : "text-sm text-foreground"
+                }
+              >
+                {entry.name}
+              </span>
+              <CategoryBadge category={entry.category} className="shrink-0" />
+              {entry.is_with_me ? (
+                <StatusChip status="withMe" className="hidden shrink-0 sm:inline-flex">
+                  With Me
+                </StatusChip>
+              ) : null}
+              {entry.is_packed ? (
+                <StatusChip status="packed" className="hidden shrink-0 sm:inline-flex">
+                  Packed
+                </StatusChip>
+              ) : null}
+            </div>
+            {nestedPath ? (
+              <span className="truncate text-xs text-muted-foreground">{nestedPath}</span>
+            ) : null}
           </div>
-          {nestedPath ? (
-            <span className="truncate text-xs text-muted-foreground">{nestedPath}</span>
-          ) : null}
         </div>
-        <Input
-          type="number"
-          min={1}
-          step={1}
-          defaultValue={entry.qty}
-          className="h-7 w-14 px-2 font-mono text-xs tabular-nums"
-          aria-label={`Quantity for ${entry.name}`}
-          onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
-        />
-        {entry.weight_grams !== null ? (
-          <span className="font-mono text-xs text-muted-foreground tabular-nums">
-            {formatWeight(entry.weight_grams, unit)}
-          </span>
-        ) : null}
-        <select
-          className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-          value={locationValue(entry)}
-          onChange={(event) => onMove(entry, event.target.value)}
-          aria-label="Location"
-        >
-          <option value="loose">Loose</option>
-          <option value="with_me">With Me</option>
-          {bags.map((bag) => (
-            <option key={bag.id} value={`bag:${bag.id}`}>
-              {bag.name}
-            </option>
-          ))}
-        </select>
-        {hasDetails ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
+        <div className="mt-0.5 hidden shrink-0 items-center gap-0.5 sm:mt-0 sm:flex">
+          {hasDetails ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  mode="icon"
+                  size="sm"
+                  aria-expanded={expanded}
+                  aria-label={
+                    expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
+                  }
+                  onClick={() => setOverride({ version: expandAll.version, open: !expanded })}
+                >
+                  {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{expanded ? "Hide details" : "Show details"}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          <RecordAction icon={Pencil} label="Edit" onClick={() => onEditDetails(entry)} />
+          <RecordAction icon={Trash2} label="Remove" onClick={() => onDelete(entry)} />
+        </div>
+        <div className="mt-0.5 flex shrink-0 items-center gap-0.5 sm:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
+                type="button"
                 variant="ghost"
                 mode="icon"
                 size="sm"
-                aria-expanded={expanded}
-                aria-label={
-                  expanded ? `Hide details for ${entry.name}` : `Show details for ${entry.name}`
-                }
-                onClick={() => setOverride({ version: expandAll.version, open: !expanded })}
+                aria-label={`Actions for ${entry.name}`}
               >
-                {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+                <Ellipsis aria-hidden="true" />
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>{expanded ? "Hide details" : "Show details"}</TooltipContent>
-          </Tooltip>
-        ) : null}
-        <RecordAction icon={Pencil} label="Edit" onClick={() => onEditDetails(entry)} />
-        <RecordAction icon={Trash2} label="Remove" onClick={() => onDelete(entry)} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {hasDetails ? (
+                <DropdownMenuItem
+                  onSelect={() => setOverride({ version: expandAll.version, open: !expanded })}
+                >
+                  {expanded ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+                  {expanded ? "Hide details" : "Show details"}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onSelect={() => onEditDetails(entry)}>
+                <Pencil aria-hidden="true" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onSelect={() => onDelete(entry)}>
+                <Trash2 aria-hidden="true" />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="order-last flex basis-full items-center gap-2 sm:order-none sm:basis-auto">
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            defaultValue={entry.qty}
+            className="h-8 w-16 shrink-0 px-2 font-mono text-xs tabular-nums sm:h-7 sm:w-14"
+            aria-label={`Quantity for ${entry.name}`}
+            onBlur={(event) => onChangeQty(entry, Number(event.target.value))}
+          />
+          <span className="min-w-16 shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+            {entry.weight_grams !== null ? formatWeight(entry.weight_grams, unit) : ""}
+          </span>
+          <select
+            className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs sm:h-7 sm:flex-none"
+            value={locationValue(entry)}
+            onChange={(event) => onMove(entry, event.target.value)}
+            aria-label="Location"
+          >
+            <option value="loose">Loose</option>
+            <option value="with_me">With Me</option>
+            {bags.map((bag) => (
+              <option key={bag.id} value={`bag:${bag.id}`}>
+                {bag.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {expanded ? (
         <div className="mt-2 flex flex-col gap-2 pl-8 text-xs text-muted-foreground">
@@ -1046,7 +1093,7 @@ export function TripView() {
           { label: trip.name },
         ]}
       >
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-0.5 shadow-xs">
+        <div className="hidden items-center gap-1 rounded-lg border border-border bg-card p-0.5 shadow-xs sm:flex">
           <RecordAction icon={Pencil} label="Edit trip" onClick={openEditTrip} />
           <RecordAction icon={Copy} label="Duplicate" onClick={openDuplicate} />
           <RecordAction icon={Share2} label="Share" onClick={openShare} />
@@ -1083,6 +1130,59 @@ export function TripView() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              mode="icon"
+              size="md"
+              aria-label="Trip actions"
+              className="sm:hidden"
+            >
+              <Ellipsis aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onSelect={openEditTrip}>
+              <Pencil aria-hidden="true" />
+              Edit trip
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={openDuplicate}>
+              <Copy aria-hidden="true" />
+              Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={openShare}>
+              <Share2 aria-hidden="true" />
+              Share
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setPdfOpen(true)}>
+              <Download aria-hidden="true" />
+              Download PDF
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={bulkBusy || progress.total === 0 || progress.packed === progress.total}
+              onSelect={() => void handleBulkPacked(true)}
+            >
+              <PackageCheck aria-hidden="true" />
+              Pack all {entryCountLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={bulkBusy || progress.total === 0 || progress.packed === 0}
+              onSelect={() => void handleBulkPacked(false)}
+            >
+              <PackageOpen aria-hidden="true" />
+              Unpack all {entryCountLabel}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+              <Trash2 aria-hidden="true" />
+              Delete trip
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
@@ -1164,7 +1264,7 @@ export function TripView() {
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:flex-wrap sm:items-center">
             {entries.length > 0 ? (
               <>
                 <PackedFilterChips
@@ -1175,13 +1275,14 @@ export function TripView() {
                     packed: progress.packed,
                     unpacked: progress.total - progress.packed,
                   }}
+                  className="grid grid-cols-3 gap-1.5 [&>button]:w-full sm:flex sm:w-auto sm:flex-wrap sm:[&>button]:w-auto"
                 />
                 <CategoryFilterSelect
                   entries={entries}
                   value={categoryFilter}
                   onChange={setCategoryFilter}
                   label="Filter entries by category"
-                  className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+                  className={cn(inputVariants({ variant: "sm" }), "pr-8 sm:w-auto")}
                 />
               </>
             ) : (
@@ -1192,14 +1293,16 @@ export function TripView() {
 
         <Card className="lg:col-span-1">
           <CardContent className="flex items-center gap-2 p-4">
-            <ListSearchToolbar
-              id="trip-search"
-              label="Search items"
-              value={search}
-              onChange={setSearch}
-              placeholder="Search this list"
-            />
-            <div className="ms-auto flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-xs">
+            <div className="min-w-0 flex-1">
+              <ListSearchToolbar
+                id="trip-search"
+                label="Search items"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search this list"
+              />
+            </div>
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-card p-0.5 shadow-xs">
               {hasAnyDetails ? (
                 <RecordAction
                   icon={expandAll.open ? ChevronsDownUp : ChevronsUpDown}
