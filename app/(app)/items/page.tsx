@@ -332,7 +332,7 @@ export function ItemsView() {
       {hasItems ? (
         <div className="grid gap-5 lg:grid-cols-3">
           <Card className="lg:col-span-2">
-            <CardContent className="flex flex-wrap items-center gap-2 p-4">
+            <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:flex-wrap sm:items-center">
               <CategoryFilterSelect
                 entries={items}
                 value={categoryFilter}
@@ -341,11 +341,11 @@ export function ItemsView() {
                   setPage(1);
                 }}
                 label="Filter items by category"
-                className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+                className={cn(inputVariants({ variant: "sm" }), "pr-8 sm:w-auto")}
               />
               <select
                 aria-label="Sort items"
-                className={cn(inputVariants({ variant: "md" }), "w-auto pr-8")}
+                className={cn(inputVariants({ variant: "sm" }), "pr-8 sm:w-auto")}
                 value={sort}
                 onChange={(event) => {
                   setSort(event.target.value as ItemSort);
@@ -359,17 +359,19 @@ export function ItemsView() {
             </CardContent>
           </Card>
           <Card className="lg:col-span-1">
-            <CardContent className="flex flex-wrap items-center gap-2 p-4">
-              <ListSearchToolbar
-                id="item-search"
-                label="Search items"
-                value={query}
-                onChange={(value) => {
-                  setQuery(value);
-                  setPage(1);
-                }}
-                placeholder="Search items"
-              />
+            <CardContent className="flex items-center gap-2 p-4">
+              <div className="min-w-0 flex-1">
+                <ListSearchToolbar
+                  id="item-search"
+                  label="Search items"
+                  value={query}
+                  onChange={(value) => {
+                    setQuery(value);
+                    setPage(1);
+                  }}
+                  placeholder="Search items"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
